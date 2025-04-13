@@ -284,11 +284,12 @@ class AudioVisualizer {
       const audioFactor = bassAvg / 255.0;
       this.sphereUniforms.uFreq.value = audioFactor;
       this.sphereUniforms.uTime.value += 0.02;
-    } else {
-      const pulseVal = this.pulseEffect();
+     } else {
       if (this.sphereUniforms) {
-        this.sphereUniforms.uFreq.value = pulseVal;
-        this.sphereUniforms.uTime.value += 0.01;
+        // Set a very low, constant 'audio' factor to keep it nearly static.
+        this.sphereUniforms.uFreq.value = 0.05;
+        // Slowly update the time uniform for very subtle animation.
+        this.sphereUniforms.uTime.value += 0.005;
       }
     }
     if (this.sphereMesh) {
