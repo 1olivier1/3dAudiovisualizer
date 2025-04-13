@@ -2,17 +2,20 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced 3D Audio Visualizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Controls for audio selection and playback -->
   <div class="controls">
     <input type="file" id="audioFileInput" accept="audio/*">
     <audio id="audioPlayer" controls></audio>
   </div>
+  <!-- The Three.js canvas -->
   <canvas id="visualizerCanvas"></canvas>
+
+  <!-- Load main.js as an ES module -->
   <script type="module" src="./main.js"></script>
-
-
 </body>
 </html>
