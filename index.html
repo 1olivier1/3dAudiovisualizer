@@ -3,20 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Reactive 3D Audio Visualizer</title>
+  <title>Advanced 3D Audio Visualizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <input type="file" id="audioUpload" accept="audio/*">
-  <div id="container"></div>
+  <!-- Controls for audio selection and playback -->
+  <div class="controls">
+    <input type="file" id="audioFileInput" accept="audio/*">
+    <audio id="audioPlayer" controls></audio>
+  </div>
+  <!-- Canvas for rendering Three.js -->
+  <canvas id="visualizerCanvas"></canvas>
 
-  <!-- Load Three.js and related scripts -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <!-- Load core Three.js (non‑module) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  
+  <!-- Load post-processing scripts (non‑module versions) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
-  <!-- Main JavaScript file -->
-  <script src="main.js"></script>
+  <!-- Load dat.GUI (for on-screen controls) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+  
+  <!-- Load your custom script (non‑module style) -->
+  <script src="./main.js"></script>
 </body>
 </html>
