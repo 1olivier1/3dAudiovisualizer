@@ -1,18 +1,20 @@
-/**
- * 3D Audio Visualizer with Three.js
- * Fixed version that resolves scope issues and correctly initializes components
- */
+// Import modules from CDNs (adjust version numbers if needed)
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
+import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/RenderPass.js';
+import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/ShaderPass.js';
+import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { CopyShader } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/shaders/CopyShader.js';
+import { GUI } from 'https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm';
 
-'use strict';
-
-// Audio Visualizer Application
+// AudioVisualizer class encapsulates the entire app
 class AudioVisualizer {
   constructor() {
     // Get DOM elements
     this.audioFileInput = document.getElementById('audioFileInput');
     this.audioPlayer = document.getElementById('audioPlayer');
     this.canvas = document.getElementById('visualizerCanvas');
-    
+
     // THREE.js basics and audio variables
     this.scene = null;
     this.camera = null;
@@ -40,7 +42,7 @@ class AudioVisualizer {
     this.noiseGLSL = `
       // Classic Perlin 3D noise function
       vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x,289.0);}
-      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159-0.85373472095314*r;}
+      vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
       float cnoise(vec3 P){
         vec3 Pi0 = floor(P);
         vec3 Pi1 = Pi0 + vec3(1.0);
@@ -54,14 +56,14 @@ class AudioVisualizer {
         vec4 ixy0 = permute(ixy + iz0);
         vec4 ixy1 = permute(ixy + iz1);
         vec4 gx0 = ixy0 * (1.0 / 7.0);
-        vec4 gy0 = fract(floor(gx0) * (1.0/7.0)) - 0.5;
+        vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
         gx0 = fract(gx0);
         vec4 gz0 = vec4(0.75) - abs(gx0) - abs(gy0);
         vec4 sz0 = step(gz0, vec4(0.0));
         gx0 -= sz0 * (step(0.0, gx0) - 0.5);
         gy0 -= sz0 * (step(0.0, gy0) - 0.5);
         vec4 gx1 = ixy1 * (1.0 / 7.0);
-        vec4 gy1 = fract(floor(gx1) * (1.0/7.0)) - 0.5;
+        vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
         gx1 = fract(gx1);
         vec4 gz1 = vec4(0.75) - abs(gx1) - abs(gy1);
         vec4 sz1 = step(gz1, vec4(0.0));
@@ -85,12 +87,15 @@ class AudioVisualizer {
         g101 *= norm1.y;
         g011 *= norm1.z;
         g111 *= norm1.w;
-        vec4 m0 = max(0.5 - vec4(dot(Pf0,Pf0), dot(vec3(Pf1.x,Pf0.yz),vec3(Pf1.x,Pf0.yz)),
-                     dot(vec3(Pf0.x,Pf1.y,Pf0.z),vec3(Pf0.x,Pf1.y,Pf0.z)), dot(Pf1,Pf1)), 0.0);
+        vec4 m0 = max(0.5 - vec4(dot(Pf0,Pf0),
+                   dot(vec3(Pf1.x,Pf0.yz), vec3(Pf1.x,Pf0.yz)),
+                   dot(vec3(Pf0.x, Pf1.y, Pf0.z), vec3(Pf0.x, Pf1.y, Pf0.z)),
+                   dot(Pf1,Pf1)), 0.0);
         m0 = m0 * m0;
-        vec4 m1 = max(0.5 - vec4(dot(vec3(Pf0.x,Pf0.y,Pf1.z),vec3(Pf0.x,Pf0.y,Pf1.z)),
-                     dot(vec3(Pf1.x,Pf1.y,Pf0.z),vec3(Pf1.x,Pf1.y,Pf0.z)),
-                     dot(vec3(Pf0.x,Pf1.yz),vec3(Pf0.x,Pf1.yz)), dot(Pf1,Pf1)), 0.0);
+        vec4 m1 = max(0.5 - vec4(dot(vec3(Pf0.x, Pf0.y, Pf1.z), vec3(Pf0.x, Pf0.y, Pf1.z)),
+                   dot(vec3(Pf1.x, Pf1.y, Pf0.z), vec3(Pf1.x, Pf1.y, Pf0.z)),
+                   dot(vec3(Pf0.x, Pf1.yz), vec3(Pf0.x, Pf1.yz)),
+                   dot(Pf1,Pf1)), 0.0);
         m1 = m1 * m1;
         float n0 = m0.x * dot(g000, Pf0);
         float n1 = m0.y * dot(g100, vec3(Pf1.x, Pf0.y, Pf0.z));
@@ -108,8 +113,8 @@ class AudioVisualizer {
     this.vertexShader = `
       uniform float uFreq;
       uniform float uTime;
-      ${this.noiseGLSL}  // Inserting noise function code here
-
+      ${this.noiseGLSL}
+      
       void main() {
         // Basic audio-driven displacement
         float displacement = 0.1 + (uFreq * 1.0);
@@ -129,57 +134,55 @@ class AudioVisualizer {
     // Fragment shader
     this.fragmentShader = `
       void main() {
-        gl_FragColor = vec4(0.2, 1.0, 0.8, 1.0);  // teal color
+        gl_FragColor = vec4(0.2, 1.0, 0.8, 1.0);
       }
     `;
 
-    // Animation frame
+    // Animation loop management
     this.animationFrameId = null;
     this.isInitialized = false;
-    
+
+    // Pulse effect variables for pre-audio visualization
+    this.pulseValue = 0;
+    this.pulseDirection = 1;
+
     // Bind event handlers
     this.handleAudioFile = this.handleAudioFile.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
     this.animate = this.animate.bind(this);
     this.pulseEffect = this.pulseEffect.bind(this);
-    
-    // Pulse variables
-    this.pulseValue = 0;
-    this.pulseDirection = 1;
-    
-    // Initialize immediately
+
+    // Initialize the visualizer
     this.init();
-    
-    // Add event listeners
+
+    // Attach event listeners
     this.attachEventListeners();
   }
 
-  // Initialize everything
+  // Set up everything
   init() {
     try {
       this.initScene();
       this.initPostProcessing();
       this.animate();
       this.isInitialized = true;
-      console.log("Visualizer initialized successfully");
+      console.log("Visualizer initialized successfully (ES Modules)");
     } catch (error) {
       console.error("Error initializing visualizer:", error);
     }
   }
 
-  // Attach event listeners
+  // Attach required event listeners
   attachEventListeners() {
     this.audioFileInput.addEventListener('change', this.handleAudioFile);
     window.addEventListener('resize', this.onWindowResize);
   }
 
-  // Initialize the Three.js scene
+  // Set up the Three.js scene, camera, and renderer
   initScene() {
-    // Create scene
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
-    
-    // Create camera
+
     this.camera = new THREE.PerspectiveCamera(
       75,
       window.innerWidth / window.innerHeight,
@@ -187,47 +190,43 @@ class AudioVisualizer {
       1000
     );
     this.camera.position.z = 5;
-    
-    // Create renderer
+
     this.renderer = new THREE.WebGLRenderer({
       canvas: this.canvas,
       antialias: true
     });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Performance optimization
-    
-    // Add ambient light
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+    // Ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    this.scene.add(ambientLight);  // Fixed - using this.scene instead of global scene
-    
-    // Create our reactive meshes
+    this.scene.add(ambientLight);
+
+    // Create reactive meshes
     this.createSphereMesh();
     this.createTorusMesh();
   }
 
-  // Create the reactive sphere mesh
+  // Create a reactive sphere with shader-based displacement
   createSphereMesh() {
-    // Create uniforms for the shader
     this.sphereUniforms = {
       uFreq: { value: 0.0 },
       uTime: { value: 0.0 }
     };
-    
-    // Create shader material
+
     const sphereMaterial = new THREE.ShaderMaterial({
       uniforms: this.sphereUniforms,
       vertexShader: this.vertexShader,
       fragmentShader: this.fragmentShader,
       wireframe: true
     });
-    
-    // Create geometry and mesh
-    const sphereGeometry = new THREE.SphereGeometry(1, 96, 96); // Slightly reduced complexity for performance
+
+    const sphereGeometry = new THREE.SphereGeometry(1, 96, 96);
     this.sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    this.scene.add(this.sphereMesh);  // Fixed - using this.scene instead of global scene
+    this.scene.add(this.sphereMesh);
   }
 
-  // Create the torus mesh
+  // Create a reactive torus that responds to a different frequency range
   createTorusMesh() {
     const torusGeometry = new THREE.TorusGeometry(1.6, 0.2, 32, 64);
     const torusMaterial = new THREE.MeshBasicMaterial({
@@ -235,10 +234,10 @@ class AudioVisualizer {
       wireframe: true
     });
     this.torusMesh = new THREE.Mesh(torusGeometry, torusMaterial);
-    this.scene.add(this.torusMesh);  // Fixed - using this.scene instead of global scene
+    this.scene.add(this.torusMesh);
   }
 
-  // Handle window resize
+  // Handle window resize events
   onWindowResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
@@ -248,55 +247,33 @@ class AudioVisualizer {
     }
   }
 
-  // Initialize post-processing with proper RenderPass setup
- initPostProcessing() {
-  try {
-    // Check if we have the right modules available (ES modules style)
-    if (typeof THREE.RenderPass === 'undefined' && window.THREE && window.THREE.RenderPass) {
-      // Use the module version
-      const renderPass = new window.THREE.RenderPass(this.scene, this.camera);
-      
-      this.composer = new window.THREE.EffectComposer(this.renderer);
+  // Initialize post-processing with RenderPass and UnrealBloomPass using ES module classes
+  initPostProcessing() {
+    try {
+      const renderPass = new RenderPass(this.scene, this.camera);
+      this.composer = new EffectComposer(this.renderer);
       this.composer.addPass(renderPass);
-      
-      this.bloomPass = new window.THREE.UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        this.params.bloomStrength,
-        this.params.bloomRadius,
-        this.params.bloomThreshold
-      );
-      this.composer.addPass(this.bloomPass);
-    } else {
-      // Try the traditional way
-      const renderPass = new THREE.RenderPass(this.scene, this.camera);
-      
-      this.composer = new THREE.EffectComposer(this.renderer);
-      this.composer.addPass(renderPass);
-      
-      this.bloomPass = new THREE.UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        this.params.bloomStrength,
-        this.params.bloomRadius,
-        this.params.bloomThreshold
-      );
-      this.composer.addPass(this.bloomPass);
-    }
-    
-    console.log("Post-processing initialized");
-    
-    // Initialize GUI
-    this.initGUI();
-  } catch (error) {
-    console.error("Error initializing post-processing:", error);
-    // Fallback - use direct renderer without post-processing
-    console.log("Using direct rendering without post-processing");
-    this.initGUI();
-  }
-}
 
-  // Initialize GUI controls
+      this.bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        this.params.bloomStrength,
+        this.params.bloomRadius,
+        this.params.bloomThreshold
+      );
+      this.composer.addPass(this.bloomPass);
+
+      console.log("Post-processing (ES Modules) initialized");
+      this.initGUI();
+    } catch (error) {
+      console.error("Error initializing post-processing:", error);
+      console.log("Falling back to direct rendering");
+      this.initGUI();
+    }
+  }
+
+  // Initialize GUI controls using lil-gui
   initGUI() {
-    const gui = new dat.GUI();
+    const gui = new GUI();
     gui.add(this.params, 'bloomThreshold', 0.0, 1.0).onChange((value) => {
       if (this.bloomPass) this.bloomPass.threshold = value;
     });
@@ -306,65 +283,53 @@ class AudioVisualizer {
     gui.add(this.params, 'bloomRadius', 0.0, 1.0).onChange((value) => {
       if (this.bloomPass) this.bloomPass.radius = value;
     });
-    
-    // Position GUI in a better spot
+    // Optionally adjust the GUI DOM positioning
     gui.domElement.style.right = '10px';
     gui.domElement.style.left = 'auto';
   }
 
-  // Create a pulsing effect for pre-audio visualization
+  // A simple pulse effect for when no audio is provided
   pulseEffect() {
-    // Create a smooth pulse between 0 and 0.5
     this.pulseValue += 0.01 * this.pulseDirection;
-    
-    // Reverse direction at boundaries
     if (this.pulseValue >= 0.5) {
       this.pulseDirection = -1;
     } else if (this.pulseValue <= 0) {
       this.pulseDirection = 1;
     }
-    
     return this.pulseValue;
   }
 
-  // Handle audio file selection
+  // Handle audio file selection and setup playback
   handleAudioFile(e) {
     const file = e.target.files[0];
     if (!file) return;
-    
     console.log("Playing audio file:", file.name);
-    
+
     try {
-      // Create audio context if needed
       if (!this.audioContext) {
         this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
         console.log("AudioContext created successfully");
       }
-      
-      // Setup audio analyzer
+
       this.analyser = this.audioContext.createAnalyser();
       this.analyser.fftSize = 2048;
       const bufferLength = this.analyser.frequencyBinCount;
       this.dataArray = new Uint8Array(bufferLength);
-      
-      // Create object URL and play audio
+
       const fileURL = URL.createObjectURL(file);
       this.audioPlayer.src = fileURL;
       this.audioPlayer.load();
-      
-      // Use a promise to handle playback
+
       this.audioPlayer.play()
         .then(() => {
           console.log("Playing audio file");
-          
-          // Connect audio to analyzer
           const source = this.audioContext.createMediaElementSource(this.audioPlayer);
           source.connect(this.analyser);
           this.analyser.connect(this.audioContext.destination);
         })
         .catch(err => {
           console.error("Audio playback error:", err);
-          alert("Could not play audio. Please try again or use a different file.");
+          alert("Could not play audio. Please try a different file.");
         });
     } catch (error) {
       console.error("Audio processing error:", error);
@@ -372,27 +337,24 @@ class AudioVisualizer {
     }
   }
 
-  // Animation loop
+  // Animation loop to update visuals
   animate() {
     this.animationFrameId = requestAnimationFrame(this.animate);
-    
+
     if (this.analyser && this.dataArray) {
-      // Real audio data
       this.analyser.getByteFrequencyData(this.dataArray);
-      
-      // Process bass frequencies for sphere
+
+      // Process bass frequencies for the sphere
       let bassSum = 0;
       for (let i = 0; i < 10; i++) {
         bassSum += this.dataArray[i];
       }
       const bassAvg = bassSum / 10;
       const audioFactor = bassAvg / 255.0;
-      
-      // Update sphere uniforms
       this.sphereUniforms.uFreq.value = audioFactor;
       this.sphereUniforms.uTime.value += 0.02;
-      
-      // Process treble frequencies for torus
+
+      // Process treble frequencies for the torus
       let trebleSum = 0;
       let count = 0;
       for (let i = 300; i < 400 && i < this.dataArray.length; i++) {
@@ -401,40 +363,33 @@ class AudioVisualizer {
       }
       const trebleAvg = trebleSum / Math.max(count, 1);
       const trebleFactor = trebleAvg / 255.0;
-      
-      // Update torus based on treble
       const scale = 1.0 + trebleFactor * 0.5;
       this.torusMesh.scale.set(scale, scale, scale);
       this.torusMesh.material.color.setHSL(0.9 - trebleFactor * 0.3, 1.0, 0.5);
     } else {
-      // Default animation when no audio is playing
+      // Fallback animation (pulsing) when no audio is playing
       const pulseVal = this.pulseEffect();
-      
-      // Animate sphere with pulsing effect
       if (this.sphereUniforms) {
         this.sphereUniforms.uFreq.value = pulseVal;
         this.sphereUniforms.uTime.value += 0.01;
       }
-      
-      // Animate torus
       if (this.torusMesh) {
         const scale = 1.0 + pulseVal * 0.3;
         this.torusMesh.scale.set(scale, scale, scale);
         this.torusMesh.material.color.setHSL(0.6 + pulseVal, 0.9, 0.5);
       }
     }
-    
-    // Rotate objects for more interesting visuals
+
+    // Rotate objects slightly for visual interest
     if (this.sphereMesh) {
       this.sphereMesh.rotation.y += 0.002;
     }
-    
     if (this.torusMesh) {
       this.torusMesh.rotation.x += 0.001;
       this.torusMesh.rotation.y += 0.002;
     }
-    
-    // Render the scene using the composer if available, otherwise use renderer directly
+
+    // Render using the composer if available, else use the renderer directly
     if (this.composer && this.composer.passes.length > 0) {
       this.composer.render();
     } else if (this.renderer && this.scene && this.camera) {
@@ -442,36 +397,28 @@ class AudioVisualizer {
     }
   }
 
-  // Clean up resources
+  // Dispose of resources when needed
   dispose() {
-    // Remove event listeners
     this.audioFileInput.removeEventListener('change', this.handleAudioFile);
     window.removeEventListener('resize', this.onWindowResize);
-    
-    // Stop animation loop
     if (this.animationFrameId) {
       cancelAnimationFrame(this.animationFrameId);
     }
-    
-    // Dispose Three.js resources
     if (this.sphereMesh) {
       this.sphereMesh.geometry.dispose();
       this.sphereMesh.material.dispose();
     }
-    
     if (this.torusMesh) {
       this.torusMesh.geometry.dispose();
       this.torusMesh.material.dispose();
     }
-    
-    // Clean up audio resources
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
     }
   }
 }
 
-// Start the visualizer when the page loads
+// Start the visualizer once the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
-  const visualizer = new AudioVisualizer();
+  new AudioVisualizer();
 });
