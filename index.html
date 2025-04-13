@@ -1,19 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D Visualizer</title>
+  <title>Advanced 3D Audio Visualizer</title>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <input type="file" id="audioFileInput" accept="audio/*">
+  <audio id="audioPlayer" controls></audio>
   <canvas id="visualizerCanvas"></canvas>
 
-  <!-- The non-module version of Three.js -->
+  <!-- Load Three.js (global script) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
-  <!-- The non-module version of OrbitControls, located in examples/js/ not jsm/ -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+  <!-- Load post-processing scripts (non-module versions) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
-  <!-- Now you can load your main.js in which you use THREE.* in the global scope -->
+  <!-- Load lil-gui (non-module version) -->
+  <script src="https://cdn.jsdelivr.net/npm/lil-gui/dist/lil-gui.min.js"></script>
+
+  <!-- Now load your main.js -->
   <script src="main.js"></script>
 </body>
 </html>
