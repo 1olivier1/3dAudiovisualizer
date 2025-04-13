@@ -7,21 +7,16 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Audio file uploader -->
   <input type="file" id="audioUpload" accept="audio/*">
-  <!-- Container for the Three.js canvas -->
   <div id="container"></div>
 
-   <!-- 1) Three.js -->
-  <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
-  
-  <!-- 2) Postprocessing scripts -->
-  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  
-  <!-- 3) Your main.js last -->
-  <script src="main.js"></script>
+  <!-- Load Three.js and related scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
+  <!-- Main JavaScript file -->
+  <script src="main.js"></script>
 </body>
 </html>
