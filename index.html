@@ -10,18 +10,22 @@
   <audio id="audioPlayer" controls></audio>
   <canvas id="visualizerCanvas"></canvas>
 
-  <!-- Load Three.js (global script) -->
+  <!-- 1) Core Three.js (Global) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
 
-  <!-- Load post-processing scripts (non-module versions) -->
+  <!-- 2) Post-processing scripts (in correct order, all from examples/js/) -->
+  <!-- EffectComposer and dependencies -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/shaders/CopyShader.js"></script>
+  <!-- RenderPass and UnrealBloomPass -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/RenderPass.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
-  <!-- Load lil-gui (non-module version) -->
-  <script src="https://cdn.jsdelivr.net/npm/lil-gui/dist/lil-gui.min.js"></script>
+  <!-- 3) GUI library (dat.GUI or lil-gui). Here, we use dat.GUI for simplicity. -->
+  <script src="https://cdn.jsdelivr.net/npm/dat.gui/build/dat.gui.min.js"></script>
 
-  <!-- Now load your main.js -->
+  <!-- 4) Finally, our custom main.js (non-module), which uses the global classes above. -->
   <script src="main.js"></script>
 </body>
 </html>
