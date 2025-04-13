@@ -19,7 +19,7 @@ class AudioVisualizer {
     // Meshes and related uniforms
     this.sphereMesh = null;
     this.sphereUniforms = null;
-    this.torusMesh = null;
+    
     
     // Post-processing and GUI parameters
     this.composer = null;
@@ -164,7 +164,7 @@ class AudioVisualizer {
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     this.scene.add(ambientLight);
     this.createSphereMesh();
-    this.createTorusMesh();
+    
   }
 
   createSphereMesh() {
@@ -183,15 +183,7 @@ class AudioVisualizer {
     this.scene.add(this.sphereMesh);
   }
 
-  createTorusMesh() {
-    const torusGeometry = new THREE.TorusGeometry(1.6, 0.2, 32, 64);
-    const torusMaterial = new THREE.MeshBasicMaterial({
-      color: 0xff0066,
-      wireframe: true
-    });
-    this.torusMesh = new THREE.Mesh(torusGeometry, torusMaterial);
-    this.scene.add(this.torusMesh);
-  }
+  
 
   onWindowResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -300,27 +292,19 @@ class AudioVisualizer {
       const trebleAvg = trebleSum / Math.max(count, 1);
       const trebleFactor = trebleAvg / 255.0;
       const scale = 1.0 + trebleFactor * 0.5;
-      this.torusMesh.scale.set(scale, scale, scale);
-      this.torusMesh.material.color.setHSL(0.9 - trebleFactor * 0.3, 1.0, 0.5);
+     
     } else {
       const pulseVal = this.pulseEffect();
       if (this.sphereUniforms) {
         this.sphereUniforms.uFreq.value = pulseVal;
         this.sphereUniforms.uTime.value += 0.01;
       }
-      if (this.torusMesh) {
-        const scale = 1.0 + pulseVal * 0.3;
-        this.torusMesh.scale.set(scale, scale, scale);
-        this.torusMesh.material.color.setHSL(0.6 + pulseVal, 0.9, 0.5);
-      }
+     
     }
     if (this.sphereMesh) {
       this.sphereMesh.rotation.y += 0.002;
     }
-    if (this.torusMesh) {
-      this.torusMesh.rotation.x += 0.001;
-      this.torusMesh.rotation.y += 0.002;
-    }
+    
     if (this.composer && this.composer.passes.length > 0) {
       this.composer.render();
     } else if (this.renderer && this.scene && this.camera) {
@@ -337,10 +321,6 @@ class AudioVisualizer {
     if (this.sphereMesh) {
       this.sphereMesh.geometry.dispose();
       this.sphereMesh.material.dispose();
-    }
-    if (this.torusMesh) {
-      this.torusMesh.geometry.dispose();
-      this.torusMesh.material.dispose();
     }
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
