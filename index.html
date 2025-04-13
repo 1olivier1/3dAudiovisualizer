@@ -1,16 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <title>Advanced 3D Audio Visualizer</title>
-  <link rel="stylesheet" href="style.css">
+  <title>3D Visualizer</title>
 </head>
 <body>
-  <input type="file" id="audioFileInput" accept="audio/*">
-  <audio id="audioPlayer" controls></audio>
   <canvas id="visualizerCanvas"></canvas>
 
-  <!-- Load our main.js as a module -->
-  <script type="module" src="main.js"></script>
+  <!-- The non-module version of Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+
+  <!-- The non-module version of OrbitControls, located in examples/js/ not jsm/ -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/OrbitControls.js"></script>
+
+  <!-- Now you can load your main.js in which you use THREE.* in the global scope -->
+  <script src="main.js"></script>
 </body>
 </html>
