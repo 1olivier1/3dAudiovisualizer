@@ -1,6 +1,6 @@
 /**
  * 3D Audio Visualizer with Three.js
- * Fixed version that pre-initializes visualization
+ * Fixed version that resolves scope issues and correctly initializes components
  */
 
 'use strict';
@@ -198,7 +198,7 @@ class AudioVisualizer {
     
     // Add ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    scene.add(ambientLight);
+    this.scene.add(ambientLight);  // Fixed - using this.scene instead of global scene
     
     // Create our reactive meshes
     this.createSphereMesh();
@@ -224,7 +224,7 @@ class AudioVisualizer {
     // Create geometry and mesh
     const sphereGeometry = new THREE.SphereGeometry(1, 96, 96); // Slightly reduced complexity for performance
     this.sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    scene.add(this.sphereMesh);
+    this.scene.add(this.sphereMesh);  // Fixed - using this.scene instead of global scene
   }
 
   // Create the torus mesh
@@ -235,7 +235,7 @@ class AudioVisualizer {
       wireframe: true
     });
     this.torusMesh = new THREE.Mesh(torusGeometry, torusMaterial);
-    scene.add(this.torusMesh);
+    this.scene.add(this.torusMesh);  // Fixed - using this.scene instead of global scene
   }
 
   // Handle window resize
@@ -248,18 +248,49 @@ class AudioVisualizer {
     }
   }
 
-  // Initialize post-processing without using RenderPass/EffectComposer
+  // Initialize post-processing with proper RenderPass setup
   initPostProcessing() {
-    // Initialize GUI only for now - we'll use direct rendering instead of composer
-    this.initGUI();
+    try {
+      // Create the render pass
+      const renderPass = new THREE.RenderPass(this.scene, this.camera);
+      
+      // Create the effect composer
+      this.composer = new THREE.EffectComposer(this.renderer);
+      this.composer.addPass(renderPass);
+      
+      // Create the bloom pass
+      this.bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        this.params.bloomStrength,
+        this.params.bloomRadius,
+        this.params.bloomThreshold
+      );
+      this.composer.addPass(this.bloomPass);
+      
+      console.log("Post-processing initialized");
+      
+      // Initialize GUI
+      this.initGUI();
+    } catch (error) {
+      console.error("Error initializing post-processing:", error);
+      // Fallback - use direct renderer without post-processing
+      console.log("Using direct rendering without post-processing");
+      this.initGUI();
+    }
   }
 
   // Initialize GUI controls
   initGUI() {
     const gui = new dat.GUI();
-    gui.add(this.params, 'bloomThreshold', 0.0, 1.0);
-    gui.add(this.params, 'bloomStrength', 0.0, 3.0);
-    gui.add(this.params, 'bloomRadius', 0.0, 1.0);
+    gui.add(this.params, 'bloomThreshold', 0.0, 1.0).onChange((value) => {
+      if (this.bloomPass) this.bloomPass.threshold = value;
+    });
+    gui.add(this.params, 'bloomStrength', 0.0, 3.0).onChange((value) => {
+      if (this.bloomPass) this.bloomPass.strength = value;
+    });
+    gui.add(this.params, 'bloomRadius', 0.0, 1.0).onChange((value) => {
+      if (this.bloomPass) this.bloomPass.radius = value;
+    });
     
     // Position GUI in a better spot
     gui.domElement.style.right = '10px';
@@ -285,6 +316,8 @@ class AudioVisualizer {
   handleAudioFile(e) {
     const file = e.target.files[0];
     if (!file) return;
+    
+    console.log("Playing audio file:", file.name);
     
     try {
       // Create audio context if needed
@@ -386,8 +419,10 @@ class AudioVisualizer {
       this.torusMesh.rotation.y += 0.002;
     }
     
-    // Render the scene
-    if (this.renderer && this.scene && this.camera) {
+    // Render the scene using the composer if available, otherwise use renderer directly
+    if (this.composer && this.composer.passes.length > 0) {
+      this.composer.render();
+    } else if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
   }
@@ -421,31 +456,7 @@ class AudioVisualizer {
   }
 }
 
-// Global variables to ensure we're in the global scope
-let scene, renderer, camera;
-
-// Initialize the application as soon as the page loads
+// Start the visualizer when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-  // Create global objects first
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
-  
-  const canvas = document.getElementById('visualizerCanvas');
-  
-  camera = new THREE.PerspectiveCamera(
-    75,
-    window.innerWidth / window.innerHeight,
-    0.1,
-    1000
-  );
-  camera.position.z = 5;
-  
-  renderer = new THREE.WebGLRenderer({
-    canvas: canvas,
-    antialias: true
-  });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  
-  // Then start the visualizer
   const visualizer = new AudioVisualizer();
 });
