@@ -67,4 +67,37 @@ function handleFileUpload(event) {
 
   const audio = new Audio(URL.createObjectURL(file));
   audio.crossOrigin = "anonymous";
-  audio
+  audio.loop = true;
+  audio.play();
+
+  const source = audioContext.createMediaElementSource(audio);
+  source.connect(analyser);
+  analyser.connect(audioContext.destination);
+}
+
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  if (analyser) {
+    analyser.getByteFrequencyData(dataArray);
+
+    let sum = dataArray.reduce((a, b) => a + b, 0);
+    let avg = sum / dataArray.length;
+
+    let scaleFactor = 1 + avg / 128;
+    sphere.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    
+    sphere.rotation.x += 0.005;
+    sphere.rotation.y += 0.01;
+  }
+
+  composer.render();
+}
