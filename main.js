@@ -26,7 +26,7 @@ class AudioVisualizer {
     this.params = {
       bloomThreshold: 0.85,
       bloomStrength: 1.5,
-      bloomRadius: 0.0
+      bloomRadius: 0.0,
       sphereColor: '#33ffcc'  // new property as a hex string
     };
     
