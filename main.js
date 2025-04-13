@@ -249,16 +249,30 @@ class AudioVisualizer {
   }
 
   // Initialize post-processing with proper RenderPass setup
-  initPostProcessing() {
-    try {
-      // Create the render pass
+ initPostProcessing() {
+  try {
+    // Check if we have the right modules available (ES modules style)
+    if (typeof THREE.RenderPass === 'undefined' && window.THREE && window.THREE.RenderPass) {
+      // Use the module version
+      const renderPass = new window.THREE.RenderPass(this.scene, this.camera);
+      
+      this.composer = new window.THREE.EffectComposer(this.renderer);
+      this.composer.addPass(renderPass);
+      
+      this.bloomPass = new window.THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        this.params.bloomStrength,
+        this.params.bloomRadius,
+        this.params.bloomThreshold
+      );
+      this.composer.addPass(this.bloomPass);
+    } else {
+      // Try the traditional way
       const renderPass = new THREE.RenderPass(this.scene, this.camera);
       
-      // Create the effect composer
       this.composer = new THREE.EffectComposer(this.renderer);
       this.composer.addPass(renderPass);
       
-      // Create the bloom pass
       this.bloomPass = new THREE.UnrealBloomPass(
         new THREE.Vector2(window.innerWidth, window.innerHeight),
         this.params.bloomStrength,
@@ -266,18 +280,19 @@ class AudioVisualizer {
         this.params.bloomThreshold
       );
       this.composer.addPass(this.bloomPass);
-      
-      console.log("Post-processing initialized");
-      
-      // Initialize GUI
-      this.initGUI();
-    } catch (error) {
-      console.error("Error initializing post-processing:", error);
-      // Fallback - use direct renderer without post-processing
-      console.log("Using direct rendering without post-processing");
-      this.initGUI();
     }
+    
+    console.log("Post-processing initialized");
+    
+    // Initialize GUI
+    this.initGUI();
+  } catch (error) {
+    console.error("Error initializing post-processing:", error);
+    // Fallback - use direct renderer without post-processing
+    console.log("Using direct rendering without post-processing");
+    this.initGUI();
   }
+}
 
   // Initialize GUI controls
   initGUI() {
