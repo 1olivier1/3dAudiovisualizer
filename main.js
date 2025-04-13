@@ -1,18 +1,57 @@
-// References to DOM elements
+// Grab references to DOM elements
 const audioFileInput = document.getElementById('audioFileInput');
 const audioPlayer = document.getElementById('audioPlayer');
 const canvas = document.getElementById('visualizerCanvas');
 
-let scene, camera, renderer, cube;
-let audioContext, analyser, dataArray;
+// Three.js core variables
+let scene, camera, renderer;
 
+// Audio / Analyser
+let audioContext;
+let analyser;
+let dataArray;
+
+// Sphere mesh & uniforms
+let sphereMesh;
+let sphereUniforms;
+
+// -----------------------------------
+// 1. Custom Shaders
+// -----------------------------------
+const vertexShader = `
+uniform float uFreq;
+uniform float uTime;
+
+void main() {
+  // Base displacement (starting offset + audio-based multiplier)
+  float displacement = 0.1 + (uFreq * 1.0);
+
+  // Add a simple sine wave animation based on time if you want
+  displacement += 0.05 * sin(uTime + position.y * 5.0);
+
+  // Push each vertex outward along its normal
+  vec3 newPosition = position + normal * displacement;
+
+  // Standard projection
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+}
+`;
+
+const fragmentShader = `
+void main() {
+  // A teal-like color
+  gl_FragColor = vec4(0.2, 1.0, 0.8, 1.0);
+}
+`;
+
+// -----------------------------------
+// 2. Initialize Three.js
+// -----------------------------------
 initThree();
 animate();
 
-// -------------------------------
-// 1. Three.js Initial Setup
-// -------------------------------
 function initThree() {
+  // Create scene, camera, renderer
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x000000);
 
@@ -30,17 +69,15 @@ function initThree() {
   });
   renderer.setSize(window.innerWidth, window.innerHeight);
 
-  // Add a basic light
+  // Optional: add a basic ambient light so things aren't pitch black
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
   scene.add(ambientLight);
 
-  // Add a test cube
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-  const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  cube = new THREE.Mesh(geometry, material);
-  scene.add(cube);
+  // Create and add the wireframe sphere
+  createSphereMesh();
 
-  window.addEventListener('resize', onWindowResize);
+  // Handle resizing
+  window.addEventListener('resize', onWindowResize, false);
 }
 
 function onWindowResize() {
@@ -49,59 +86,86 @@ function onWindowResize() {
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// -------------------------------
-// 2. Animation Loop
-// -------------------------------
-function animate() {
-  requestAnimationFrame(animate);
+// -----------------------------------
+// 3. Create the Wireframe Sphere Mesh
+// -----------------------------------
+function createSphereMesh() {
+  // These uniforms will be updated in the animation loop
+  sphereUniforms = {
+    uFreq: { value: 0.0 },
+    uTime: { value: 0.0 }
+  };
 
-  // If we have an analyser, get the data
-  if (analyser) {
-    analyser.getByteFrequencyData(dataArray);
+  const sphereMaterial = new THREE.ShaderMaterial({
+    uniforms: sphereUniforms,
+    vertexShader,
+    fragmentShader,
+    wireframe: true // wireframe look
+  });
 
-    // Example: average of first 10 bins -> "bass" 
-    let bassSum = 0;
-    for (let i = 0; i < 10; i++) {
-      bassSum += dataArray[i];
-    }
-    const bassAverage = bassSum / 10;
-    // Scale the cube's y-axis based on bass
-    const scale = 1 + (bassAverage / 255) * 5;
-    cube.scale.y = scale;
+  // A high-resolution sphere geometry for smooth displacement
+  const sphereGeometry = new THREE.SphereGeometry(1, 128, 128);
 
-    // Overall average for color shift
-    const overallAvg = dataArray.reduce((acc, val) => acc + val, 0) / dataArray.length;
-    const hue = (overallAvg / 255) * 360;
-    cube.material.color.setHSL(hue / 360, 1, 0.5);
-  }
-
-  renderer.render(scene, camera);
+  sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+  scene.add(sphereMesh);
 }
 
-// -------------------------------
-// 3. Audio File Input & Analyser
-// -------------------------------
+// -----------------------------------
+// 4. Audio Input & Analyser Setup
+// -----------------------------------
 audioFileInput.addEventListener('change', handleAudioFile);
 
 function handleAudioFile(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  // Create AudioContext if we haven't yet
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
 
+  // Analyser setup
   analyser = audioContext.createAnalyser();
-  analyser.fftSize = 2048;
+  analyser.fftSize = 2048; // Must be power of 2
   const bufferLength = analyser.frequencyBinCount;
   dataArray = new Uint8Array(bufferLength);
 
+  // Load file into audio element
   const fileURL = URL.createObjectURL(file);
   audioPlayer.src = fileURL;
   audioPlayer.load();
   audioPlayer.play();
 
+  // Connect nodes
   const source = audioContext.createMediaElementSource(audioPlayer);
   source.connect(analyser);
   analyser.connect(audioContext.destination);
+}
+
+// -----------------------------------
+// 5. The Animation Loop
+// -----------------------------------
+function animate() {
+  requestAnimationFrame(animate);
+
+  // If there's audio data, update shader uniforms
+  if (analyser && dataArray) {
+    analyser.getByteFrequencyData(dataArray);
+
+    // For example, average the first 10 bins as “bass”
+    let bassSum = 0;
+    for (let i = 0; i < 10; i++) {
+      bassSum += dataArray[i];
+    }
+    const bassAvg = bassSum / 10;
+    const audioFactor = bassAvg / 255.0; // normalized 0 -> 1
+
+    // Pass data to the shader
+    sphereUniforms.uFreq.value = audioFactor;
+
+    // Increment time so there's a slight wave movement
+    sphereUniforms.uTime.value += 0.01;
+  }
+
+  renderer.render(scene, camera);
 }
