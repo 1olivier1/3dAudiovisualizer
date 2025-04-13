@@ -9,25 +9,17 @@
 <body>
   <div class="controls">
     <input type="file" id="audioFileInput" accept="audio/*">
-    <button id="startButton">Click to Start Visualizer</button>
     <audio id="audioPlayer" controls></audio>
   </div>
   <canvas id="visualizerCanvas"></canvas>
 
-  <!-- Load Three.js from CDN -->
+  <!-- Core Three.js library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/three.min.js"></script>
   
-  <!-- Load Three.js dependencies in correct order -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/examples/js/shaders/CopyShader.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  
-  <!-- Use a lightweight GUI library -->
+  <!-- GUI library -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
   
-  <!-- Load our optimized script -->
+  <!-- Main script (note: removed unused libraries) -->
   <script src="main.js"></script>
 </body>
 </html>
