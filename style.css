@@ -1,52 +1,27 @@
+/* style.css */
+
+/* Reset default margins and ensure full-window usage */
 html, body {
   margin: 0;
   padding: 0;
-  height: 100%;
-  width: 100%;
-  background-color: black;
   overflow: hidden;
-  font-family: Arial, sans-serif;
-}
-
-#visualizerCanvas {
-  display: block;
-  width: 100%;
   height: 100%;
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
+  background: #000;
+  color: #fff;
+  font-family: sans-serif;
 }
 
-.controls {
+/* Make sure the container takes up the entire viewport */
+#container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+}
+
+/* Position the audio file input in a fixed spot */
+#audioUpload {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 20px;
+  left: 20px;
   z-index: 10;
-  background-color: rgba(0, 0, 0, 0.5);
-  padding: 10px;
-  border-radius: 5px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#audioFileInput {
-  color: white;
-  cursor: pointer;
-}
-
-#audioPlayer {
-  width: 250px;
-}
-
-/* Make GUI more visible */
-.dg.ac {
-  z-index: 10 !important;
-}
-
-/* Ensure the canvas is visible */
-canvas {
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: crisp-edges;
 }
