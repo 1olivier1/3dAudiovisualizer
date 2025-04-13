@@ -204,7 +204,6 @@ class AudioVisualizer {
       console.log("Post-processing (Global) initialized");
       this.initGUI();
     } catch (error) {
-      console.error("Error initializing post-processing:", error);
       console.log("Falling back to direct rendering");
       this.initGUI();
     }
