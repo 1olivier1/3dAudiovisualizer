@@ -166,7 +166,7 @@ class AudioVisualizer {
   createSphereMesh() {
     this.sphereUniforms = {
       uFreq: { value: 0.0 },
-      uTime: { value: 0.0 }
+      uTime: { value: 0.0 },
       uColor: { value: new THREE.Color(0x33ffcc) } // default color
     };
     const sphereMaterial = new THREE.ShaderMaterial({
