@@ -3,20 +3,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Advanced 3D Audio Visualizer</title>
+  <title>Reactive 3D Audio Visualizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Controls for audio selection and playback -->
-  <div class="controls">
-    <input type="file" id="audioFileInput" accept="audio/*">
-    <audio id="audioPlayer" controls></audio>
-  </div>
-  <!-- The Three.js canvas -->
-  <canvas id="visualizerCanvas"></canvas>
+  <!-- Audio file uploader -->
+  <input type="file" id="audioUpload" accept="audio/*">
+  <!-- Container for the Three.js canvas -->
+  <div id="container"></div>
 
-  <!-- Load main.js as an ES module -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js"></script>
-  <script src="./main.js" type="module"></script>
+  <!-- Three.js library -->
+  <script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+  <!-- Postprocessing libraries for bloom effect -->
+  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://unpkg.com/three@0.149.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <!-- Main script -->
+  <script src="main.js"></script>
 </body>
 </html>
