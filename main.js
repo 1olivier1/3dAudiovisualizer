@@ -27,6 +27,7 @@ class AudioVisualizer {
       bloomThreshold: 0.85,
       bloomStrength: 1.5,
       bloomRadius: 0.0
+      sphereColor: '#33ffcc'  // new property as a hex string
     };
     
     // Noise GLSL (Perlin Noise) shader code
@@ -110,11 +111,12 @@ class AudioVisualizer {
     `;
 
     // Fragment shader (teal color)
-    this.fragmentShader = `
-      void main() {
-        gl_FragColor = vec4(0.2, 1.0, 0.8, 1.0);
-      }
-    `;
+      this.fragmentShader = `
+    uniform vec3 uColor;
+    void main() {
+      gl_FragColor = vec4(uColor, 1.0);
+    }
+  `;
 
     this.animationFrameId = null;
     this.pulseValue = 0;
@@ -165,6 +167,7 @@ class AudioVisualizer {
     this.sphereUniforms = {
       uFreq: { value: 0.0 },
       uTime: { value: 0.0 }
+      uColor: { value: new THREE.Color(0x33ffcc) } // default color
     };
     const sphereMaterial = new THREE.ShaderMaterial({
       uniforms: this.sphereUniforms,
@@ -220,6 +223,12 @@ class AudioVisualizer {
     });
     gui.domElement.style.right = '10px';
     gui.domElement.style.left = 'auto';
+    
+   gui.addColor(this.params, 'sphereColor').onChange((value) => {
+    if (this.sphereUniforms) {
+    this.sphereUniforms.uColor.value.set(value);
+  }
+  }); 
   }
 
   pulseEffect() {
