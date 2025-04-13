@@ -1,6 +1,6 @@
 'use strict';
 
-// Audio Visualizer Application (Global version)
+// Audio Visualizer Application (Global version – Sphere Only)
 class AudioVisualizer {
   constructor() {
     // Get DOM elements
@@ -16,10 +16,9 @@ class AudioVisualizer {
     this.analyser = null;
     this.dataArray = null;
     
-    // Meshes and related uniforms
+    // Mesh and related uniforms (only sphere now)
     this.sphereMesh = null;
     this.sphereUniforms = null;
-    
     
     // Post-processing and GUI parameters
     this.composer = null;
@@ -78,9 +77,9 @@ class AudioVisualizer {
                      dot(vec3(Pf0.x, Pf1.y, Pf0.z), vec3(Pf0.x, Pf1.y, Pf0.z)),
                      dot(Pf1,Pf1)), 0.0);
         m0 = m0 * m0;
-        vec4 m1 = max(0.5 - vec4(dot(vec3(Pf0.x, Pf0.y, Pf1.z), vec3(Pf0.x, Pf0.y, Pf1.z)),
-                     dot(vec3(Pf1.x, Pf1.y, Pf0.z), vec3(Pf1.x, Pf1.y, Pf0.z)),
-                     dot(vec3(Pf0.x, Pf1.yz), vec3(Pf0.x, Pf1.yz)),
+        vec4 m1 = max(0.5 - vec4(dot(vec3(Pf0.x,Pf0.y,Pf1.z), vec3(Pf0.x,Pf0.y,Pf1.z)),
+                     dot(vec3(Pf1.x,Pf1.y,Pf0.z), vec3(Pf1.x,Pf1.y,Pf0.z)),
+                     dot(vec3(Pf0.x,Pf1.yz), vec3(Pf0.x,Pf1.yz)),
                      dot(Pf1,Pf1)), 0.0);
         m1 = m1 * m1;
         float n0 = m0.x * dot(g000, Pf0);
@@ -95,7 +94,7 @@ class AudioVisualizer {
       }
     `;
 
-    // Vertex shader that uses the noise and audio uniforms
+    // Vertex shader (using noise and audio uniforms)
     this.vertexShader = `
       uniform float uFreq;
       uniform float uTime;
@@ -127,7 +126,7 @@ class AudioVisualizer {
     this.animate = this.animate.bind(this);
     this.pulseEffect = this.pulseEffect.bind(this);
 
-    // Initialize everything
+    // Initialize and attach events
     this.init();
     this.attachEventListeners();
   }
@@ -137,7 +136,7 @@ class AudioVisualizer {
       this.initScene();
       this.initPostProcessing();
       this.animate();
-      console.log("Visualizer initialized successfully (Global)");
+      console.log("Visualizer initialized successfully (Sphere Only, Global)");
     } catch (error) {
       console.error("Error initializing visualizer:", error);
     }
@@ -151,20 +150,15 @@ class AudioVisualizer {
   initScene() {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x000000);
-    this.camera = new THREE.PerspectiveCamera(
-      75,
-      window.innerWidth / window.innerHeight,
-      0.1,
-      1000
-    );
+    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     this.camera.position.z = 5;
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
     this.scene.add(ambientLight);
+    // Only create the sphere mesh
     this.createSphereMesh();
-    
   }
 
   createSphereMesh() {
@@ -182,8 +176,6 @@ class AudioVisualizer {
     this.sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
     this.scene.add(this.sphereMesh);
   }
-
-  
 
   onWindowResize() {
     this.camera.aspect = window.innerWidth / window.innerHeight;
@@ -283,28 +275,16 @@ class AudioVisualizer {
       const audioFactor = bassAvg / 255.0;
       this.sphereUniforms.uFreq.value = audioFactor;
       this.sphereUniforms.uTime.value += 0.02;
-      let trebleSum = 0;
-      let count = 0;
-      for (let i = 300; i < 400 && i < this.dataArray.length; i++) {
-        trebleSum += this.dataArray[i];
-        count++;
-      }
-      const trebleAvg = trebleSum / Math.max(count, 1);
-      const trebleFactor = trebleAvg / 255.0;
-      const scale = 1.0 + trebleFactor * 0.5;
-     
     } else {
       const pulseVal = this.pulseEffect();
       if (this.sphereUniforms) {
         this.sphereUniforms.uFreq.value = pulseVal;
         this.sphereUniforms.uTime.value += 0.01;
       }
-     
     }
     if (this.sphereMesh) {
       this.sphereMesh.rotation.y += 0.002;
     }
-    
     if (this.composer && this.composer.passes.length > 0) {
       this.composer.render();
     } else if (this.renderer && this.scene && this.camera) {
