@@ -1,9 +1,8 @@
 /**
  * 3D Audio Visualizer with Three.js
- * Optimized for GitHub Pages
+ * Fixed version that pre-initializes visualization
  */
 
-// Use strict mode for better error handling and more secure code
 'use strict';
 
 // Audio Visualizer Application
@@ -12,7 +11,6 @@ class AudioVisualizer {
     // Get DOM elements
     this.audioFileInput = document.getElementById('audioFileInput');
     this.audioPlayer = document.getElementById('audioPlayer');
-    this.startButton = document.getElementById('startButton');
     this.canvas = document.getElementById('visualizerCanvas');
     
     // THREE.js basics and audio variables
@@ -22,6 +20,7 @@ class AudioVisualizer {
     this.audioContext = null;
     this.analyser = null;
     this.dataArray = null;
+    this.dummyData = new Uint8Array(1024).fill(0); // For pre-audio visualization
 
     // Meshes and related uniforms
     this.sphereMesh = null;
@@ -136,22 +135,42 @@ class AudioVisualizer {
 
     // Animation frame
     this.animationFrameId = null;
+    this.isInitialized = false;
     
     // Bind event handlers
     this.handleAudioFile = this.handleAudioFile.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
     this.animate = this.animate.bind(this);
-    this.startVisualizer = this.startVisualizer.bind(this);
+    this.pulseEffect = this.pulseEffect.bind(this);
+    
+    // Pulse variables
+    this.pulseValue = 0;
+    this.pulseDirection = 1;
+    
+    // Initialize immediately
+    this.init();
     
     // Add event listeners
     this.attachEventListeners();
+  }
+
+  // Initialize everything
+  init() {
+    try {
+      this.initScene();
+      this.initPostProcessing();
+      this.animate();
+      this.isInitialized = true;
+      console.log("Visualizer initialized successfully");
+    } catch (error) {
+      console.error("Error initializing visualizer:", error);
+    }
   }
 
   // Attach event listeners
   attachEventListeners() {
     this.audioFileInput.addEventListener('change', this.handleAudioFile);
     window.addEventListener('resize', this.onWindowResize);
-    this.startButton.addEventListener('click', this.startVisualizer);
   }
 
   // Initialize the Three.js scene
@@ -179,7 +198,7 @@ class AudioVisualizer {
     
     // Add ambient light
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    this.scene.add(ambientLight);
+    scene.add(ambientLight);
     
     // Create our reactive meshes
     this.createSphereMesh();
@@ -205,7 +224,7 @@ class AudioVisualizer {
     // Create geometry and mesh
     const sphereGeometry = new THREE.SphereGeometry(1, 96, 96); // Slightly reduced complexity for performance
     this.sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
-    this.scene.add(this.sphereMesh);
+    scene.add(this.sphereMesh);
   }
 
   // Create the torus mesh
@@ -216,7 +235,7 @@ class AudioVisualizer {
       wireframe: true
     });
     this.torusMesh = new THREE.Mesh(torusGeometry, torusMaterial);
-    this.scene.add(this.torusMesh);
+    scene.add(this.torusMesh);
   }
 
   // Handle window resize
@@ -229,69 +248,37 @@ class AudioVisualizer {
     }
   }
 
-  // Initialize post-processing with bloom effect
-  initComposer() {
-    // Create render pass
-    const renderPass = new THREE.RenderPass(this.scene, this.camera);
-    
-    // Create bloom pass
-    this.bloomPass = new THREE.UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      this.params.bloomStrength,
-      this.params.bloomRadius,
-      this.params.bloomThreshold
-    );
-    
-    // Create effect composer
-    this.composer = new THREE.EffectComposer(this.renderer);
-    this.composer.addPass(renderPass);
-    this.composer.addPass(this.bloomPass);
-    
+  // Initialize post-processing without using RenderPass/EffectComposer
+  initPostProcessing() {
+    // Initialize GUI only for now - we'll use direct rendering instead of composer
     this.initGUI();
   }
 
   // Initialize GUI controls
   initGUI() {
     const gui = new dat.GUI();
-    gui.add(this.params, 'bloomThreshold', 0.0, 1.0).onChange(value => {
-      this.bloomPass.threshold = value;
-    });
-    gui.add(this.params, 'bloomStrength', 0.0, 3.0).onChange(value => {
-      this.bloomPass.strength = value;
-    });
-    gui.add(this.params, 'bloomRadius', 0.0, 1.0).onChange(value => {
-      this.bloomPass.radius = value;
-    });
+    gui.add(this.params, 'bloomThreshold', 0.0, 1.0);
+    gui.add(this.params, 'bloomStrength', 0.0, 3.0);
+    gui.add(this.params, 'bloomRadius', 0.0, 1.0);
     
     // Position GUI in a better spot
     gui.domElement.style.right = '10px';
     gui.domElement.style.left = 'auto';
   }
 
-  // Start the visualizer with user interaction
-  startVisualizer() {
-    // This helps with autoplay policies by creating audio context after user interaction
-    if (!this.audioContext) {
-      try {
-        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        console.log("AudioContext created successfully");
-        
-        // Initialize scene if not already done
-        if (!this.scene) {
-          this.initScene();
-          this.initComposer();
-          this.animate();
-          console.log("Scene initialized");
-        }
-        
-        // Disable the start button once clicked
-        this.startButton.disabled = true;
-        this.startButton.textContent = "Visualizer Running";
-      } catch (error) {
-        console.error("Error initializing audio context:", error);
-        alert("Failed to initialize audio. Please try a different browser.");
-      }
+  // Create a pulsing effect for pre-audio visualization
+  pulseEffect() {
+    // Create a smooth pulse between 0 and 0.5
+    this.pulseValue += 0.01 * this.pulseDirection;
+    
+    // Reverse direction at boundaries
+    if (this.pulseValue >= 0.5) {
+      this.pulseDirection = -1;
+    } else if (this.pulseValue <= 0) {
+      this.pulseDirection = 1;
     }
+    
+    return this.pulseValue;
   }
 
   // Handle audio file selection
@@ -300,9 +287,10 @@ class AudioVisualizer {
     if (!file) return;
     
     try {
-      // Ensure audio context is created
+      // Create audio context if needed
       if (!this.audioContext) {
-        this.startVisualizer();
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        console.log("AudioContext created successfully");
       }
       
       // Setup audio analyzer
@@ -341,6 +329,7 @@ class AudioVisualizer {
     this.animationFrameId = requestAnimationFrame(this.animate);
     
     if (this.analyser && this.dataArray) {
+      // Real audio data
       this.analyser.getByteFrequencyData(this.dataArray);
       
       // Process bass frequencies for sphere
@@ -369,17 +358,36 @@ class AudioVisualizer {
       const scale = 1.0 + trebleFactor * 0.5;
       this.torusMesh.scale.set(scale, scale, scale);
       this.torusMesh.material.color.setHSL(0.9 - trebleFactor * 0.3, 1.0, 0.5);
+    } else {
+      // Default animation when no audio is playing
+      const pulseVal = this.pulseEffect();
       
-      // Rotate meshes slightly for more dynamic visuals
+      // Animate sphere with pulsing effect
+      if (this.sphereUniforms) {
+        this.sphereUniforms.uFreq.value = pulseVal;
+        this.sphereUniforms.uTime.value += 0.01;
+      }
+      
+      // Animate torus
+      if (this.torusMesh) {
+        const scale = 1.0 + pulseVal * 0.3;
+        this.torusMesh.scale.set(scale, scale, scale);
+        this.torusMesh.material.color.setHSL(0.6 + pulseVal, 0.9, 0.5);
+      }
+    }
+    
+    // Rotate objects for more interesting visuals
+    if (this.sphereMesh) {
       this.sphereMesh.rotation.y += 0.002;
+    }
+    
+    if (this.torusMesh) {
       this.torusMesh.rotation.x += 0.001;
       this.torusMesh.rotation.y += 0.002;
     }
     
-    // Render using composer for post-processing effects
-    if (this.composer) {
-      this.composer.render();
-    } else {
+    // Render the scene
+    if (this.renderer && this.scene && this.camera) {
       this.renderer.render(this.scene, this.camera);
     }
   }
@@ -389,7 +397,6 @@ class AudioVisualizer {
     // Remove event listeners
     this.audioFileInput.removeEventListener('change', this.handleAudioFile);
     window.removeEventListener('resize', this.onWindowResize);
-    this.startButton.removeEventListener('click', this.startVisualizer);
     
     // Stop animation loop
     if (this.animationFrameId) {
@@ -414,7 +421,31 @@ class AudioVisualizer {
   }
 }
 
-// Initialize the application when the DOM is fully loaded
+// Global variables to ensure we're in the global scope
+let scene, renderer, camera;
+
+// Initialize the application as soon as the page loads
 document.addEventListener('DOMContentLoaded', () => {
+  // Create global objects first
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+  
+  const canvas = document.getElementById('visualizerCanvas');
+  
+  camera = new THREE.PerspectiveCamera(
+    75,
+    window.innerWidth / window.innerHeight,
+    0.1,
+    1000
+  );
+  camera.position.z = 5;
+  
+  renderer = new THREE.WebGLRenderer({
+    canvas: canvas,
+    antialias: true
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  
+  // Then start the visualizer
   const visualizer = new AudioVisualizer();
 });
