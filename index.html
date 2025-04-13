@@ -1,22 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Advanced 3D Audio Visualizer</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <!-- Controls for audio selection and playback -->
-  <div class="controls">
-    <input type="file" id="audioFileInput" accept="audio/*">
-    <audio id="audioPlayer" controls></audio>
-  </div>
-  <!-- The Three.js canvas -->
-  <canvas id="visualizerCanvas"></canvas>
+  <head>
+    <meta charset="UTF-8" />
+    <title>3D Audio Visualizer</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #000;
+      }
+      #audioInput {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Audio File Input -->
+    <input type="file" id="audioInput" accept="audio/*" />
 
-  <!-- Load main.js as an ES module -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js"></script>
-  <script src="./main.js" type="module"></script>
-</body>
+    <!-- Three.js & Postprocessing Scripts from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+    <script>
+      // Basic Three.js Setup
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+      );
+      camera.position.z = 5;
+
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      document.body.appendChild(renderer.domElement);
+
+      // Create a wireframe sphere
+      const sphereGeometry = new THREE.SphereGeometry(1, 32, 32);
+      const sphereWireframe = new THREE.WireframeGeometry(sphereGeometry);
+      const sphere = new THREE.LineSegments(
+        sphereWireframe,
+        new THREE.LineBasicMaterial({ color: 0x00ff00 })
+      );
+      scene.add(sphere);
+
+      // Create a wireframe torus
+      const torusGeometry = new THREE.TorusGeometry(1.5, 0.3, 16, 100);
+      const torusWireframe = new THREE.WireframeGeometry(torusGeometry);
+      const torus = new THREE.LineSegments(
+        torusWireframe,
+        new THREE.LineBasicMaterial({ color: 0xff0000 })
+      );
+      scene.add(torus);
+
+      // Position the torus
+      torus.rotation.x = Math.PI / 2;
+
+      // Responsive design: update renderer and camera on resize
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      // --- Audio Setup ---
+      let audioContext, audioSource, analyser;
+      const frequencyData = new Uint8Array(128);
+
+      // Setup audio when a file is selected
+      document.getElementById("audioInput").addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // Create a new AudioContext
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Create an audio element and use FileReader to load file as URL
+        const audio = new Audio();
+        const fileURL = URL.createObjectURL(file);
+        audio.src = fileURL;
+        audio.crossOrigin = "anonymous";
+        audio.load();
+        audio.play();
+
+        // Create media element source and analyser
+        audioSource = audioContext.createMediaElementSource(audio);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256; // lower value for performance and smoother data
+        audioSource.connect(analyser);
+        analyser.connect(audioContext.destination);
+      });
+
+      // --- Postprocessing for Bloom Effect ---
+      const composer = new THREE.EffectComposer(renderer);
+      const renderPass = new THREE.RenderPass(scene, camera);
+      composer.addPass(renderPass);
+      
+      // Setup bloom pass; adjust the parameters as needed
+      const bloomParams = {
+        exposure: 1,
+        bloomStrength: 1.5,
+        bloomThreshold: 0.0,
+        bloomRadius: 0.4,
+      };
+      const bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        bloomParams.bloomStrength,
+        bloomParams.bloomRadius,
+        bloomParams.bloomThreshold
+      );
+      composer.addPass(bloomPass);
+
+      // --- Animation Loop ---
+      function animate() {
+        requestAnimationFrame(animate);
+
+        if (analyser) {
+          // Get frequency data from analyser
+          analyser.getByteFrequencyData(frequencyData);
+          // Calculate an average value across some frequency bins
+          const avgFrequency = frequencyData.reduce((sum, value) => sum + value, 0) / frequencyData.length;
+
+          // Use audio data to animate properties:
+          // For instance, modulate the scale and rotation based on frequency amplitude
+          const scaleFactor = 1 + avgFrequency / 256;
+          sphere.scale.set(scaleFactor, scaleFactor, scaleFactor);
+          torus.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+          sphere.rotation.y += 0.01 + avgFrequency / 5000;
+          torus.rotation.x += 0.01 + avgFrequency / 5000;
+        }
+
+        // Instead of calling renderer.render, use composer to render with bloom effect
+        composer.render();
+      }
+      animate();
+    </script>
+  </body>
 </html>
