@@ -101,7 +101,7 @@ class AudioVisualizer {
       uniform float uTime;
       ${this.noiseGLSL}
       void main() {
-        float displacement = 0.1 + (uFreq * 1.0);
+        float displacement = 0.1 + (uFreq * 0.2);
         float n = cnoise(vec3(position * 1.5 + uTime * 0.2));
         displacement += 0.3 * n;
         displacement += 0.05 * sin(uTime + position.y * 5.0);
