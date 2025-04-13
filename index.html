@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced 3D Audio Visualizer</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -12,21 +11,6 @@
     <audio id="audioPlayer" controls></audio>
   </div>
   <canvas id="visualizerCanvas"></canvas>
-
-  <!-- Core Three.js library -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-  
-  <!-- Post-processing scripts (non-module versions) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/shaders/CopyShader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
-  
-  <!-- GUI library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
-  
-  <!-- Main script -->
-  <script src="main.js"></script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
