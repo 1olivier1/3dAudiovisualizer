@@ -1,10 +1,10 @@
-// 1) IMPORTS for ES Modules
+/*1) IMPORTS for ES Modules
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js';
 import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { GUI } from 'https://cdn.jsdelivr.net/npm/lil-gui@0.17/+esm';
-
+*/
 // 2) DOM Elements
 const audioFileInput = document.getElementById('audioFileInput');
 const audioPlayer = document.getElementById('audioPlayer');
