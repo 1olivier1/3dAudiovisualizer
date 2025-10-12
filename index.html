@@ -7,33 +7,40 @@
   <link rel="icon" href="./favicon.ico" type="image/x-icon" />
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header class="topbar glass">
     <div class="brand">
       <span class="dot"></span>
       <span>ProxySoul Visualizer v2</span>
     </div>
+
     <div class="controls">
       <label class="btn file">
         <input type="file" id="fileInput" accept="audio/*" />
         Upload
       </label>
       <button id="micBtn" class="btn">Mic</button>
+
       <select id="mode" class="select">
         <option value="sphere">Sphere</option>
         <option value="bars">Bars</option>
         <option value="waveform">Waveform</option>
       </select>
+
       <label class="range">
         Sens.
         <input type="range" id="sensitivity" min="0.5" max="4" step="0.1" value="1.6" />
       </label>
+
       <label class="range">
         Smoothing
         <input type="range" id="smoothing" min="0" max="0.95" step="0.01" value="0.7" />
       </label>
+
       <button id="rgbToggle" class="btn active" title="Rainbow color cycle">RGB</button>
       <input type="color" id="color" value="#33ffcc" class="color" title="Accent color" />
+
       <button id="playPause" class="btn">Play</button>
       <button id="fullscreen" class="btn">⤢</button>
       <button id="screenshot" class="btn">📸</button>
@@ -52,12 +59,14 @@
     </small>
   </footer>
 
-  <!-- Three.js + helpers (non-module) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/controls/OrbitControls.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/EffectComposer.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/RenderPass.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155/examples/js/postprocessing/UnrealBloomPass.js"></script>
+  <!-- ✅ Legacy-compatible Three.js r149 imports -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149/examples/js/postprocessing/UnrealBloomPass.js"></script>
+
+  <!-- Your visualizer logic -->
   <script src="main.js"></script>
 </body>
 </html>
