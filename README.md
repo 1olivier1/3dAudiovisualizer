@@ -1,54 +1,32 @@
-# 3dAudiovisualizer
+# ProxySoul 3D Audio Visualizer v2
 
-A reactive 3D audio visualizer built with Three.js that creates beautiful visual representations of your music. The visualizer uses frequency data from audio files to animate a wireframe sphere and torus.
+Upgraded UI + new modes (Sphere, Bars, Waveform). Drag & drop audio, mic input, screenshots, fullscreen, and quick keyboard toggles.
 
 ## Features
+- Three modes:
+  - **Sphere** — shader-displaced wireframe sphere reactive to bass.
+  - **Bars** — circular instanced bars reacting to full spectrum.
+  - **Waveform** — oscilloscope-style time-domain line.
+- **Modern glass UI**: mode switcher, sensitivity, smoothing, color, Play/Pause, Mic, Fullscreen, Screenshot.
+- **Drag & drop** audio, or upload via button. Mic input supported (browser permission required).
+- **Keyboard**: `U` toggle UI, `B` toggle bloom, `G` grid, `R` reset camera.
+- **Mobile-friendly** (best on modern mobile/desktop browsers).
 
-- Interactive 3D visualizations that react to audio frequencies
-- Upload and play your own audio files
-- Beautiful bloom effects with adjustable parameters
-- Responsive design that works on different screen sizes
+## Usage (GitHub Pages)
+1. Create a repo (or use your existing one).
+2. Copy these files to the repo root (or `/docs`) and commit.
+3. In repo settings → Pages, set the branch to `main` and the folder you used (root or `/docs`).
+4. Visit your GitHub Pages URL to run.
 
-## How to Use
+## Files
+- `index.html` — shell & UI.
+- `style.css` — glass aesthetic.
+- `main.js` — Three.js logic, audio + modes.
 
-1. Visit the GitHub Pages site for this repository
-2. Click the "Click to Start Visualizer" button (this is required due to browser audio policies)
-3. Upload an audio file using the file input
-4. Enjoy the visualization!
-5. Adjust the bloom effect parameters using the control panel on the right
+## Credits
+- Three.js for rendering
+- Web Audio API for analysis
 
-## Technical Details
-
-This visualizer uses:
-
-- Three.js for 3D rendering
-- Web Audio API for audio analysis
-- Custom GLSL shaders for dynamic vertex displacement
-- UnrealBloomPass for post-processing effects
-- dat.GUI for the control panel
-
-## Browser Compatibility
-
-This visualizer works best in modern browsers that support the Web Audio API and WebGL. Recommended browsers:
-
-- Chrome
-- Firefox
-- Edge
-- Safari (latest version)
-
-## Development
-
-To run this project locally:
-
-1. Clone the repository
-2. Open index.html in your browser or use a local server
-3. For best results, use a local server to avoid CORS issues
-
-## Troubleshooting
-
-If you encounter issues:
-
-- Ensure your browser supports the Web Audio API and WebGL
-- Check the browser console for any errors
-- Try using a different audio file (MP3 or WAV formats work best)
-- Clear your browser cache or try in an incognito/private browsing window
+### New
+- **RGB glow** button (default ON): auto rainbow cycling with bass-reactive saturation.
+- **Audio-reactive bloom**: glow strength pulses with bass.
