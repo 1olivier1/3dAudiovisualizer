@@ -1,8 +1,13 @@
-'use strict';
+// Import necessary classes from Three.js and its addons
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { GUI } from 'three/addons/libs/lil-gui.module.min.js';
 
 class AudioVisualizer {
   constructor() {
-    // Get DOM elements
+    // DOM elements (code unchanged)
     this.startScreen = document.getElementById('startScreen');
     this.startButton = document.getElementById('startButton');
     this.controlsContainer = document.querySelector('.controls');
@@ -10,19 +15,15 @@ class AudioVisualizer {
     this.audioPlayer = document.getElementById('audioPlayer');
     this.canvas = document.getElementById('visualizerCanvas');
     
-    // THREE.js basics and audio variables
+    // Properties (code unchanged)
     this.scene = null;
     this.camera = null;
     this.renderer = null;
     this.audioContext = null;
     this.analyser = null;
     this.dataArray = null;
-    
-    // Mesh and related uniforms
     this.sphereMesh = null;
     this.sphereUniforms = null;
-    
-    // Post-processing and GUI parameters
     this.composer = null;
     this.bloomPass = null;
     this.params = {
@@ -32,8 +33,8 @@ class AudioVisualizer {
       sphereColor: '#33ffcc'
     };
     
+    // Shaders (code unchanged)
     this.noiseGLSL = `
-      // Classic Perlin 3D noise function (code unchanged)
       vec4 permute(vec4 x){ return mod(((x*34.0)+1.0)*x,289.0); }
       vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
       float cnoise(vec3 P){
@@ -93,7 +94,6 @@ class AudioVisualizer {
         return 42.0 * dot(m4 * p + m4_ * p_, vec4(1.0));
       }
     `;
-
     this.vertexShader = `
       uniform float uFreq;
       uniform float uTime;
@@ -107,14 +107,12 @@ class AudioVisualizer {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
       }
     `;
-
     this.fragmentShader = `
       uniform vec3 uColor;
       void main() {
         gl_FragColor = vec4(uColor, 1.0);
       }
     `;
-
     this.animationFrameId = null;
 
     // Bind event handlers
@@ -122,7 +120,6 @@ class AudioVisualizer {
     this.handleAudioFile = this.handleAudioFile.bind(this);
     this.onWindowResize = this.onWindowResize.bind(this);
     this.animate = this.animate.bind(this);
-
     this.init();
   }
 
@@ -140,14 +137,9 @@ class AudioVisualizer {
 
   startExperience() {
     console.log("Starting experience...");
-    // Initialize AudioContext
     this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Show controls and hide start screen
     this.startScreen.classList.add('hidden');
     this.controlsContainer.classList.remove('hidden');
-
-    // Attach remaining event listeners
     this.audioFileInput.addEventListener('change', this.handleAudioFile);
     window.addEventListener('resize', this.onWindowResize);
   }
@@ -160,8 +152,6 @@ class AudioVisualizer {
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-    this.scene.add(ambientLight);
     this.createSphereMesh();
   }
 
@@ -192,10 +182,12 @@ class AudioVisualizer {
   }
 
   initPostProcessing() {
-    const renderPass = new THREE.RenderPass(this.scene, this.camera);
-    this.composer = new THREE.EffectComposer(this.renderer);
+    // This line caused the error. Now it works because RenderPass is imported.
+    const renderPass = new RenderPass(this.scene, this.camera); 
+    
+    this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(renderPass);
-    this.bloomPass = new THREE.UnrealBloomPass(
+    this.bloomPass = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
       this.params.bloomStrength,
       this.params.bloomRadius,
@@ -206,7 +198,8 @@ class AudioVisualizer {
   }
 
   initGUI() {
-    const gui = new dat.GUI();
+    // Use the imported 'GUI' instead of the old 'dat.GUI'
+    const gui = new GUI();
     gui.add(this.params, 'bloomThreshold', 0.0, 1.0).onChange(value => {
       this.bloomPass.threshold = value;
     });
@@ -226,23 +219,13 @@ class AudioVisualizer {
   handleAudioFile(e) {
     const file = e.target.files[0];
     if (!file) return;
-
-    if (!this.audioContext) {
-        console.error("AudioContext not initialized!");
-        alert("Please start the visualizer first.");
-        return;
-    }
-    
-    // Resume audio context if it was suspended
+    if (!this.audioContext) return;
     if (this.audioContext.state === 'suspended') {
-        this.audioContext.resume();
+      this.audioContext.resume();
     }
-
     this.analyser = this.audioContext.createAnalyser();
     this.analyser.fftSize = 2048;
-    const bufferLength = this.analyser.frequencyBinCount;
-    this.dataArray = new Uint8Array(bufferLength);
-    
+    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
     const fileURL = URL.createObjectURL(file);
     this.audioPlayer.src = fileURL;
     this.audioPlayer.load();
@@ -259,7 +242,6 @@ class AudioVisualizer {
 
   animate() {
     this.animationFrameId = requestAnimationFrame(this.animate);
-    
     if (this.analyser && this.dataArray) {
       this.analyser.getByteFrequencyData(this.dataArray);
       let bassSum = 0;
@@ -274,11 +256,9 @@ class AudioVisualizer {
       this.sphereUniforms.uFreq.value = 0.05;
       this.sphereUniforms.uTime.value += 0.005;
     }
-    
     if (this.sphereMesh) {
       this.sphereMesh.rotation.y += 0.002;
     }
-    
     if (this.composer) {
       this.composer.render();
     } else {
@@ -287,6 +267,10 @@ class AudioVisualizer {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+// The script now runs from a module, so we need to ensure the class is instantiated
+// when the DOM is ready.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => new AudioVisualizer());
+} else {
   new AudioVisualizer();
-});
+}
