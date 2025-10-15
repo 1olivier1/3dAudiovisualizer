@@ -1,74 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ProxySoul 3D Audio Visualizer v2</title>
-  <link rel="icon" href="./favicon.ico" type="image/x-icon" />
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced 3D Audio Visualizer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="./favicon.ico" type="image/x-icon">
 </head>
-
 <body>
-  <header class="topbar glass">
-    <div class="brand">
-      <span class="dot"></span>
-      <span>ProxySoul Visualizer v2</span>
-    </div>
 
-    <div class="controls">
-      <label class="btn file">
-        <input type="file" id="fileInput" accept="audio/*" />
-        Upload
-      </label>
-      <button id="micBtn" class="btn">Mic</button>
+  <div id="startScreen">
+    <button id="startButton">Click to Start Visualizer</button>
+  </div>
 
-      <select id="mode" class="select">
-        <option value="sphere">Sphere</option>
-        <option value="bars">Bars</option>
-        <option value="waveform">Waveform</option>
-      </select>
+  <div class="controls hidden">
+    <input type="file" id="audioFileInput" accept="audio/*">
+    <audio id="audioPlayer" controls></audio>
+  </div>
+  
+  <canvas id="visualizerCanvas"></canvas>
 
-      <label class="range">
-        Sens.
-        <input type="range" id="sensitivity" min="0.5" max="4" step="0.1" value="1.6" />
-      </label>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+  
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/EffectComposer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/ShaderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/shaders/CopyShader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/RenderPass.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/postprocessing/UnrealBloomPass.js"></script>
 
-      <label class="range">
-        Smoothing
-        <input type="range" id="smoothing" min="0" max="0.95" step="0.01" value="0.7" />
-      </label>
-
-      <button id="rgbToggle" class="btn active" title="Rainbow color cycle">RGB</button>
-      <input type="color" id="color" value="#33ffcc" class="color" title="Accent color" />
-
-      <button id="playPause" class="btn">Play</button>
-      <button id="fullscreen" class="btn">⤢</button>
-      <button id="screenshot" class="btn">📸</button>
-    </div>
-  </header>
-
-  <main id="stage">
-    <canvas id="canvas"></canvas>
-    <div id="dropHint" class="hint">Drop audio here</div>
-  </main>
-
-  <footer class="glass footer">
-    <small>
-      Modes: Sphere (shader-reactive), Bars (instanced), Waveform (line). 
-      Drag & drop audio • U: toggle UI • B: toggle bloom • G: grid • R: reset camera
-    </small>
-  </footer>
-
-   <!-- Legacy-compatible Three.js r149 (globals) -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/examples/js/controls/OrbitControls.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/examples/js/postprocessing/EffectComposer.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/examples/js/postprocessing/RenderPass.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r149/examples/js/postprocessing/UnrealBloomPass.min.js"></script>
-
-
-
-  <!-- Your visualizer logic -->
-  <script src="main.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
+  
+  <script src="./main.js"></script>
 </body>
 </html>
