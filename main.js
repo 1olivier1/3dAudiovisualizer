@@ -734,6 +734,7 @@ class AudioVisualizer {
     // Audio
     const audioFolder = gui.addFolder('Audio');
     audioFolder.add(this, 'toggleMicrophone').name('🎤 Use Microphone');
+    audioFolder.add(this, 'toggleDesktopAudio').name('🖥️ Desktop Audio');
     audioFolder.add(this.params, 'beatSensitivity', 0.5, 2.0).name('Beat Sensitivity');
 
     // Rainbow Colors
@@ -821,6 +822,66 @@ class AudioVisualizer {
       .catch(err => {
         console.error('Microphone error:', err);
         alert('Could not access microphone');
+      });
+  }
+
+  toggleDesktopAudio() {
+    // Check if browser supports getDisplayMedia
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+      alert('Your browser does not support capturing system audio.');
+      return;
+    }
+
+    navigator.mediaDevices.getDisplayMedia({
+      video: true, // Video is required to capture audio
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false
+      }
+    })
+      .then(stream => {
+        // We only need the audio
+        const audioTrack = stream.getAudioTracks()[0];
+
+        if (!audioTrack) {
+          stream.getTracks().forEach(track => track.stop());
+          alert('No audio track found. Did you check "Share Audio"?');
+          return;
+        }
+
+        if (!this.audioContext) {
+          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        } else if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume();
+        }
+
+        this.analyser = this.audioContext.createAnalyser();
+        this.analyser.fftSize = 2048;
+        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
+
+        const source = this.audioContext.createMediaStreamSource(stream);
+        source.connect(this.analyser);
+        // Don't connect to destination to avoid feedback loop if capturing own output
+        // But for system audio, we usually want to hear it, so it depends.
+        // If capturing "system audio" it usually means "what I hear", so we don't need to output it again.
+
+        console.log('🖥️ Desktop Audio enabled');
+        this.isPlaying = true;
+        this.useMicrophone = false;
+        this.params.rainbow = true; // Fun default
+        this.updateRainbowColors(0);
+
+        // Stop stream when track ends (user clicks "Stop Sharing")
+        audioTrack.onended = () => {
+          console.log('Desktop Audio stopped');
+          if (this.analyser) {
+            this.analyser.disconnect();
+          }
+        };
+      })
+      .catch(err => {
+        console.error('Desktop Audio error:', err);
       });
   }
 
