@@ -174,7 +174,10 @@ class AudioVisualizer {
     this.barMeshes = [];
     this.particles = null;
     this.particleSystem = null;
-    this.waveformLine = null;
+    this.particles = null;
+    this.particleSystem = null;
+    this.waveformLines = [];
+    this.waveHistory = [];
     this.backgroundStars = null;
 
     // Post-processing
@@ -227,6 +230,10 @@ class AudioVisualizer {
       // Background
       showStars: true,
       starCount: 1000,
+
+      // Waveform
+      waveCount: 20,
+      waveSpacing: 0.5,
 
       // Camera
       autoRotate: true,
@@ -554,26 +561,38 @@ class AudioVisualizer {
   }
 
   createWaveform() {
-    const points = [];
+    this.waveformLines = [];
+    this.waveHistory = [];
     const segmentCount = 256;
 
-    for (let i = 0; i < segmentCount; i++) {
-      const x = (i / segmentCount - 0.5) * 10;
-      points.push(new THREE.Vector3(x, 0, 0));
+    // Initialize history buffer
+    for (let i = 0; i < this.params.waveCount; i++) {
+      this.waveHistory.push(new Float32Array(segmentCount).fill(0));
     }
 
-    const geometry = new THREE.BufferGeometry().setFromPoints(points);
-    const material = new THREE.LineBasicMaterial({
-      color: this.params.primaryColor,
-      linewidth: 2,
-      transparent: true,
-      opacity: 0.8
-    });
+    for (let i = 0; i < this.params.waveCount; i++) {
+      const points = [];
+      for (let j = 0; j < segmentCount; j++) {
+        const x = (j / segmentCount - 0.5) * 10;
+        // Position z back based on index
+        points.push(new THREE.Vector3(x, 0, -i * this.params.waveSpacing));
+      }
 
-    this.waveformLine = new THREE.Line(geometry, material);
-    this.waveformLine.position.y = -2;
-    this.scene.add(this.waveformLine);
+      const geometry = new THREE.BufferGeometry().setFromPoints(points);
+      const material = new THREE.LineBasicMaterial({
+        color: this.params.primaryColor,
+        linewidth: 2,
+        transparent: true,
+        opacity: Math.max(0.1, 1 - i / this.params.waveCount) // Fade out further back
+      });
+
+      const line = new THREE.Line(geometry, material);
+      line.position.y = -2;
+      this.waveformLines.push(line);
+      this.scene.add(line);
+    }
   }
+
 
   createBackgroundStars() {
     const count = this.params.starCount;
@@ -615,8 +634,10 @@ class AudioVisualizer {
       this.particleSystem.visible = mode === 'particles' || mode === 'combined';
     }
 
-    if (this.waveformLine) {
-      this.waveformLine.visible = mode === 'waveform' || mode === 'combined';
+    if (this.waveformLines && this.waveformLines.length > 0) {
+      this.waveformLines.forEach(line => {
+        line.visible = mode === 'waveform' || mode === 'combined';
+      });
     }
 
     if (this.backgroundStars) {
@@ -774,8 +795,10 @@ class AudioVisualizer {
       bar.material.emissive = color;
     });
 
-    if (this.waveformLine) {
-      this.waveformLine.material.color = primary;
+    if (this.waveformLines.length > 0) {
+      this.waveformLines.forEach(line => {
+        line.material.color = primary;
+      });
     }
   }
 
@@ -1279,30 +1302,51 @@ class AudioVisualizer {
   }
 
   updateWaveform() {
-    if (!this.waveformLine) return;
+    if (this.waveformLines.length === 0) return;
 
-    const positions = this.waveformLine.geometry.attributes.position.array;
+    const segmentCount = 256;
+
+    // Shift history
+    this.waveHistory.pop(); // Remove oldest
+
+    // Create new data entry
+    let newData = new Float32Array(segmentCount);
+
     const time = this.clock.getElapsedTime();
 
     if (!this.dataArray) {
       // Ambient wave animation when no audio
-      for (let i = 0; i < positions.length / 3; i++) {
-        const x = (i / (positions.length / 3)) * Math.PI * 4;
-        const ambientWave = Math.sin(x + time * 0.5) * 0.2 + Math.sin(x * 2 + time * 0.8) * 0.1;
-        positions[i * 3 + 1] = ambientWave;
+      for (let i = 0; i < segmentCount; i++) {
+        const x = (i / segmentCount) * Math.PI * 4;
+        newData[i] = Math.sin(x + time * 2.0) * 0.2 + Math.sin(x * 2 + time * 3.0) * 0.1;
       }
-      this.waveformLine.geometry.attributes.position.needsUpdate = true;
-      return;
+    } else {
+      // Audio data
+      const step = Math.floor(this.dataArray.length / segmentCount);
+      for (let i = 0; i < segmentCount; i++) {
+        const value = this.dataArray[i * step] / 255;
+        newData[i] = value * 2.5 * this.params.reactivity; // Scale up height
+      }
     }
 
-    const step = Math.floor(this.dataArray.length / (positions.length / 3));
+    // Add new data to front of history
+    this.waveHistory.unshift(newData);
 
-    for (let i = 0; i < positions.length / 3; i++) {
-      const value = this.dataArray[i * step] / 255;
-      positions[i * 3 + 1] = value * 2 * this.params.reactivity - 1;
-    }
+    // Update all lines based on history
+    this.waveformLines.forEach((line, index) => {
+      if (this.waveHistory[index]) {
+        const positions = line.geometry.attributes.position.array;
+        const data = this.waveHistory[index];
+        const len = positions.length / 3;
 
-    this.waveformLine.geometry.attributes.position.needsUpdate = true;
+        for (let i = 0; i < len; i++) {
+          if (data[i] !== undefined) {
+            positions[i * 3 + 1] = data[i];
+          }
+        }
+        line.geometry.attributes.position.needsUpdate = true;
+      }
+    });
   }
 
   updateCamera(time) {
