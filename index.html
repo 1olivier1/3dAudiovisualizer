@@ -4,21 +4,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description"
-    content="A reactive 3D audio visualizer built with Three.js that creates stunning visual representations of your music.">
-  <meta name="keywords" content="audio visualizer, 3D, Three.js, WebGL, music, visualization">
-  <meta name="author" content="ProxiSol">
-  <meta property="og:title" content="3D Audio Visualizer">
-  <meta property="og:description"
-    content="Experience your music in a whole new dimension with this reactive 3D visualizer.">
-  <meta property="og:type" content="website">
-  <title>3D Audio Visualizer | ProxiSol</title>
+  <meta name="description" content="A reactive 3D audio visualizer built with Three.js">
+  <title>3D Audio Visualizer</title>
   <link rel="icon" href="./favicon.ico" type="image/x-icon">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-    rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -45,224 +36,39 @@
     </div>
   </div>
 
-  <!-- Navigation -->
-  <nav class="navbar">
-    <div class="nav-brand">
-      <span class="brand-icon">◈</span>
-      <span class="brand-text">ProxiSol</span>
-    </div>
-
-    <!-- Hamburger Menu Button -->
-    <button class="hamburger" id="hamburgerBtn" aria-label="Toggle menu">
-      <span></span>
-      <span></span>
-      <span></span>
-    </button>
-
-    <div class="nav-links" id="navLinks">
-      <a href="#features">Features</a>
-      <a href="#demo">Demo</a>
-      <a href="#tech">Tech</a>
-      <a href="https://github.com/1olivier1/3dAudiovisualizer" target="_blank" class="btn-github">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path
-            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+  <!-- Main Visualizer Container -->
+  <div class="visualizer-container">
+    <!-- Controls -->
+    <div class="controls-bar">
+      <input type="file" id="audioFileInput" accept="audio/*">
+      <label for="audioFileInput" class="file-label">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
-        GitHub
-      </a>
+        Choose Audio
+      </label>
+      <audio id="audioPlayer" controls></audio>
+      <button class="fullscreen-btn" id="fullscreenBtn" title="Fullscreen (F)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
+        </svg>
+      </button>
     </div>
-  </nav>
 
-  <!-- Hero Section -->
-  <section class="hero">
-    <div class="hero-bg"></div>
-    <div class="hero-content">
-      <div class="hero-badge">🎵 Audio + Visual + 3D</div>
-      <h1 class="hero-title">
-        Experience Music in
-        <span class="gradient-text">Three Dimensions</span>
-      </h1>
-      <p class="hero-subtitle">
-        A reactive 3D audio visualizer that transforms your music into mesmerizing
-        visual art. Built with Three.js and the Web Audio API.
-      </p>
-      <div class="hero-buttons">
-        <a href="#demo" class="btn btn-primary">
-          <span>Try It Now</span>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12h14M12 5l7 7-7 7" />
-          </svg>
-        </a>
-        <a href="https://github.com/1olivier1/3dAudiovisualizer" target="_blank" class="btn btn-secondary">
-          View Source
-        </a>
-      </div>
-      <div class="hero-stats">
-        <div class="stat">
-          <span class="stat-value">60</span>
-          <span class="stat-label">FPS Rendering</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat">
-          <span class="stat-value">2048</span>
-          <span class="stat-label">FFT Size</span>
-        </div>
-        <div class="stat-divider"></div>
-        <div class="stat">
-          <span class="stat-value">∞</span>
-          <span class="stat-label">Possibilities</span>
-        </div>
-      </div>
-    </div>
-    <div class="hero-visual">
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
-    </div>
-  </section>
+    <!-- 3D Visualizer Canvas -->
+    <canvas id="visualizerCanvas"></canvas>
 
-  <!-- Features Section -->
-  <section id="features" class="features">
-    <div class="section-header">
-      <span class="section-tag">Features</span>
-      <h2>What Makes It Special</h2>
+    <!-- Keyboard hints -->
+    <div class="keyboard-hints">
+      <span><kbd>Space</kbd> Play/Pause</span>
+      <span><kbd>F</kbd> Fullscreen</span>
+      <span><kbd>M</kbd> Mute</span>
+      <span><kbd>←→</kbd> Seek</span>
+      <span><kbd>↑↓</kbd> Volume</span>
     </div>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon">🎧</div>
-        <h3>Real-time Audio Analysis</h3>
-        <p>Uses Web Audio API to analyze frequency data in real-time, creating visuals that perfectly sync with your
-          music.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🌐</div>
-        <h3>3D WebGL Rendering</h3>
-        <p>Powered by Three.js for smooth 60 FPS rendering with dynamic vertex displacement and procedural noise.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">✨</div>
-        <h3>Bloom Post-Processing</h3>
-        <p>Unreal Engine-style bloom effects with adjustable threshold, strength, and radius for that perfect glow.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🎨</div>
-        <h3>Customizable Colors</h3>
-        <p>Real-time color picker lets you personalize the visualizer to match your mood or aesthetic.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">📱</div>
-        <h3>Responsive Design</h3>
-        <p>Works seamlessly across desktop and mobile devices with automatic resolution scaling.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">🔊</div>
-        <h3>Any Audio File</h3>
-        <p>Drop in any MP3, WAV, or audio file and watch it come to life in stunning 3D.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Demo Section -->
-  <section id="demo" class="demo">
-    <div class="section-header">
-      <span class="section-tag">Live Demo</span>
-      <h2>See It In Action</h2>
-    </div>
-    <div class="demo-container">
-      <div class="demo-wrapper">
-        <div class="demo-controls">
-          <input type="file" id="audioFileInput" accept="audio/*">
-          <label for="audioFileInput" class="file-label">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            Choose Audio File
-          </label>
-          <audio id="audioPlayer" controls></audio>
-          <button class="fullscreen-btn" id="fullscreenBtn" title="Fullscreen (F)">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" />
-            </svg>
-          </button>
-        </div>
-        <canvas id="visualizerCanvas"></canvas>
-      </div>
-      <p class="demo-hint">💡 Upload or drag & drop an audio file. Use keyboard shortcuts: <kbd>Space</kbd> Play/Pause,
-        <kbd>F</kbd> Fullscreen, <kbd>M</kbd> Mute, <kbd>←→</kbd> Seek, <kbd>↑↓</kbd> Volume</p>
-    </div>
-  </section>
-
-  <!-- Tech Stack Section -->
-  <section id="tech" class="tech">
-    <div class="section-header">
-      <span class="section-tag">Tech Stack</span>
-      <h2>Built With Modern Tech</h2>
-    </div>
-    <div class="tech-grid">
-      <div class="tech-item">
-        <div class="tech-logo">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40">
-            <path d="M12 0L1.5 6v12L12 24l10.5-6V6L12 0zm0 2.16l8.16 4.67v9.34L12 20.84l-8.16-4.67V6.83L12 2.16z" />
-          </svg>
-        </div>
-        <span>Three.js</span>
-      </div>
-      <div class="tech-item">
-        <div class="tech-logo">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40">
-            <path
-              d="M0 0h24v24H0V0zm22.034 18.276c-.175-1.095-.888-2.015-3.003-2.873-.736-.345-1.554-.585-1.797-1.14-.091-.33-.105-.51-.046-.705.15-.646.915-.84 1.515-.66.39.12.75.42.976.9 1.034-.676 1.034-.676 1.755-1.125-.27-.42-.405-.585-.585-.765-.63-.63-1.5-.945-2.895-.885l-.705.089c-.676.165-1.32.525-1.71 1.005-1.14 1.291-.811 3.541.569 4.471 1.365 1.02 3.361 1.244 3.616 2.205.24 1.17-.87 1.545-1.966 1.41-.811-.18-1.26-.586-1.755-1.336l-1.83 1.051c.21.48.45.689.81 1.109 1.74 1.756 6.09 1.666 6.871-1.004.029-.09.24-.705.074-1.65l.046.067zm-8.983-7.245h-2.248c0 1.938-.009 3.864-.009 5.805 0 1.232.063 2.363-.138 2.711-.33.689-1.18.601-1.566.48-.396-.196-.597-.466-.83-.855-.063-.105-.11-.196-.127-.196l-1.825 1.125c.305.63.75 1.172 1.324 1.517.855.51 2.004.675 3.207.405.783-.226 1.458-.691 1.811-1.411.51-.93.402-2.07.397-3.346.012-2.054 0-4.109 0-6.179l.004-.056z" />
-          </svg>
-        </div>
-        <span>JavaScript</span>
-      </div>
-      <div class="tech-item">
-        <div class="tech-logo">🎵</div>
-        <span>Web Audio API</span>
-      </div>
-      <div class="tech-item">
-        <div class="tech-logo">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40">
-            <path
-              d="M12.001 4.529c-4.063 0-6.96 2.023-7.502 5.395h.001c.017-.069.04-.134.064-.199.037-.098.081-.191.131-.282.05-.091.106-.179.168-.264.061-.085.129-.166.202-.244.073-.078.151-.153.235-.225.084-.072.173-.14.266-.205.093-.065.191-.126.294-.185.102-.058.209-.113.32-.165.111-.052.226-.101.346-.147.119-.046.243-.088.37-.128.128-.04.259-.077.394-.111.135-.034.274-.065.416-.093.142-.028.288-.053.437-.076.149-.022.301-.042.457-.059.156-.017.315-.031.478-.043.163-.012.33-.02.5-.026.171-.006.345-.009.523-.009.177 0 .351.003.522.009.17.006.337.015.5.026.163.012.322.026.478.043.156.017.308.037.457.059.149.023.295.048.437.076.142.028.281.059.416.093.135.034.266.071.394.111.127.04.251.082.37.128.12.046.235.095.346.147.111.052.218.107.32.165.103.059.201.12.294.185.093.065.182.133.266.205.084.072.162.147.235.225.073.078.141.159.202.244.062.085.118.173.168.264.05.091.094.184.131.282.024.065.047.13.064.199-.542-3.372-3.439-5.395-7.502-5.395zm0 15.941c4.063 0 6.96-2.023 7.502-5.395h-.001c-.017.069-.04.134-.064.199-.037.098-.081.191-.131.282-.05.091-.106.179-.168.264-.061.085-.129.166-.202.244-.073.078-.151.153-.235.225-.084.072-.173.14-.266.205-.093.065-.191.126-.294.185-.102.058-.209.113-.32.165-.111.052-.226.101-.346.147-.119.046-.243.088-.37.128-.128.04-.259.077-.394.111-.135.034-.274.065-.416.093-.142.028-.288.053-.437.076-.149.022-.301.042-.457.059-.156.017-.315.031-.478.043-.163.012-.33.02-.5.026-.171.006-.345.009-.522.009-.178 0-.352-.003-.523-.009-.17-.006-.337-.015-.5-.026-.163-.012-.322-.026-.478-.043-.156-.017-.308-.037-.457-.059-.149-.023-.295-.048-.437-.076-.142-.028-.281-.059-.416-.093-.135-.034-.266-.071-.394-.111-.127-.04-.251-.082-.37-.128-.12-.046-.235-.095-.346-.147-.111-.052-.218-.107-.32-.165-.103-.059-.201-.12-.294-.185-.093-.065-.182-.133-.266-.205-.084-.072-.162-.147-.235-.225-.073-.078-.141-.159-.202-.244-.062-.085-.118-.173-.168-.264-.05-.091-.094-.184-.131-.282-.024-.065-.047-.13-.064-.199.542 3.372 3.439 5.395 7.502 5.395z" />
-          </svg>
-        </div>
-        <span>GLSL Shaders</span>
-      </div>
-      <div class="tech-item">
-        <div class="tech-logo">🎛️</div>
-        <span>dat.GUI</span>
-      </div>
-      <div class="tech-item">
-        <div class="tech-logo">
-          <svg viewBox="0 0 24 24" fill="currentColor" width="40" height="40">
-            <path
-              d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
-          </svg>
-        </div>
-        <span>GitHub Pages</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="footer-content">
-      <div class="footer-brand">
-        <span class="brand-icon">◈</span>
-        <span>ProxiSol</span>
-      </div>
-      <p>Made with 🎵 and Three.js</p>
-      <div class="footer-links">
-        <a href="https://youtube.com/@proxisol" target="_blank">YouTube</a>
-        <a href="https://tiktok.com/@1proxisol" target="_blank">TikTok</a>
-        <a href="https://instagram.com/proxibuilds" target="_blank">Instagram</a>
-        <a href="https://github.com/1olivier1" target="_blank">GitHub</a>
-      </div>
-    </div>
-  </footer>
+  </div>
 
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>

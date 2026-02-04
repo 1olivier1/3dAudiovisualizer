@@ -915,11 +915,10 @@ class AudioVisualizer {
   }
 
   toggleFullscreen() {
-    const demoWrapper = document.querySelector('.demo-wrapper');
-    if (!demoWrapper) return;
+    const container = document.querySelector('.visualizer-container') || document.documentElement;
 
     if (!document.fullscreenElement) {
-      demoWrapper.requestFullscreen().catch(err => {
+      container.requestFullscreen().catch(err => {
         console.log('Fullscreen error:', err);
       });
     } else {
