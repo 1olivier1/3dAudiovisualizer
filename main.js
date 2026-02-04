@@ -962,13 +962,22 @@ class AudioVisualizer {
     console.log('Loading:', file.name);
     this.showLoading();
 
+    // Create audio context on user interaction (required by browsers)
     if (!this.audioContext) {
       this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
     }
 
-    this.analyser = this.audioContext.createAnalyser();
-    this.analyser.fftSize = 2048;
-    this.analyser.smoothingTimeConstant = 0.8;
+    // Resume audio context if suspended
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume();
+    }
+
+    // Only create analyser if not already created
+    if (!this.analyser) {
+      this.analyser = this.audioContext.createAnalyser();
+      this.analyser.fftSize = 2048;
+      this.analyser.smoothingTimeConstant = 0.8;
+    }
     this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
 
     const fileURL = URL.createObjectURL(file);
@@ -980,18 +989,22 @@ class AudioVisualizer {
     }, { once: true });
 
     this.audioPlayer.play().then(() => {
-      console.log('▶️ Playing');
+      console.log('▶️ Playing:', file.name);
       this.hideLoading();
+
+      // Only create media element source once
       if (!this.audioSource) {
         this.audioSource = this.audioContext.createMediaElementSource(this.audioPlayer);
         this.audioSource.connect(this.analyser);
         this.analyser.connect(this.audioContext.destination);
       }
+
       this.isPlaying = true;
       this.useMicrophone = false;
     }).catch(err => {
       console.error('Playback error:', err);
       this.hideLoading();
+      alert('Could not play audio file. Try clicking the play button manually.');
     });
   }
 
