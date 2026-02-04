@@ -231,7 +231,11 @@ class AudioVisualizer {
       // Camera
       autoRotate: true,
       autoRotateSpeed: 0.3,
-      cameraPulse: true
+      cameraPulse: true,
+
+      // Rainbow
+      rainbow: false,
+      rainbowSpeed: 0.5
     };
 
     // Themes
@@ -732,6 +736,11 @@ class AudioVisualizer {
     audioFolder.add(this, 'toggleMicrophone').name('🎤 Use Microphone');
     audioFolder.add(this.params, 'beatSensitivity', 0.5, 2.0).name('Beat Sensitivity');
 
+    // Rainbow Colors
+    const rainbowFolder = gui.addFolder('🌈 Rainbow Effect');
+    rainbowFolder.add(this.params, 'rainbow').name('Enable Rainbow');
+    rainbowFolder.add(this.params, 'rainbowSpeed', 0.1, 5.0).name('Speed');
+
     gui.close();
   }
 
@@ -767,6 +776,22 @@ class AudioVisualizer {
     if (this.waveformLine) {
       this.waveformLine.material.color = primary;
     }
+  }
+
+  updateRainbowColors(time) {
+    const speed = this.params.rainbowSpeed;
+    const hue1 = (time * speed * 0.1) % 1;
+    const hue2 = (time * speed * 0.1 + 0.5) % 1;
+
+    const color1 = new THREE.Color().setHSL(hue1, 1, 0.5);
+    const color2 = new THREE.Color().setHSL(hue2, 1, 0.5);
+
+    this.params.primaryColor = '#' + color1.getHexString();
+    this.params.secondaryColor = '#' + color2.getHexString();
+
+    // Update dat.GUI controllers if needed (manual sync)
+    // this.updateColors() will apply the new colors to objects
+    this.updateColors();
   }
 
   toggleMicrophone() {
@@ -1260,6 +1285,11 @@ class AudioVisualizer {
     this.animationFrameId = requestAnimationFrame(this.animate);
 
     const time = this.clock.getElapsedTime();
+
+    // Rainbow effect
+    if (this.params.rainbow) {
+      this.updateRainbowColors(time);
+    }
 
     // Analyze audio
     this.analyzeFrequencies();
