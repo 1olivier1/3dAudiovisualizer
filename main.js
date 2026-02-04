@@ -621,18 +621,33 @@ class AudioVisualizer {
   }
 
   initPostProcessing() {
-    const renderPass = new THREE.RenderPass(this.scene, this.camera);
+    try {
+      // Check if post-processing classes are available
+      if (typeof THREE.RenderPass === 'undefined' ||
+        typeof THREE.UnrealBloomPass === 'undefined' ||
+        typeof THREE.EffectComposer === 'undefined') {
+        console.warn('Post-processing not available, using standard renderer');
+        this.composer = null;
+        return;
+      }
 
-    this.bloomPass = new THREE.UnrealBloomPass(
-      new THREE.Vector2(window.innerWidth, window.innerHeight),
-      this.params.bloomStrength,
-      this.params.bloomRadius,
-      this.params.bloomThreshold
-    );
+      const renderPass = new THREE.RenderPass(this.scene, this.camera);
 
-    this.composer = new THREE.EffectComposer(this.renderer);
-    this.composer.addPass(renderPass);
-    this.composer.addPass(this.bloomPass);
+      this.bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        this.params.bloomStrength,
+        this.params.bloomRadius,
+        this.params.bloomThreshold
+      );
+
+      this.composer = new THREE.EffectComposer(this.renderer);
+      this.composer.addPass(renderPass);
+      this.composer.addPass(this.bloomPass);
+      console.log('Post-processing enabled with bloom effect');
+    } catch (err) {
+      console.warn('Post-processing failed to initialize:', err.message);
+      this.composer = null;
+    }
   }
 
   initControls() {
