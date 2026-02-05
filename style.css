@@ -174,6 +174,7 @@ body {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .controls-bar input[type="file"] {
@@ -257,6 +258,7 @@ body {
   border-radius: var(--radius-md);
   font-size: 0.85rem;
   color: var(--text-secondary);
+  transition: transform 0.3s ease, opacity 0.3s ease;
 }
 
 .keyboard-hints span {
@@ -277,11 +279,54 @@ kbd {
 }
 
 /* ============================================
+   Fullscreen Mode - Hide UI Elements
+   ============================================ */
+
+/* In fullscreen, hide controls by default */
+.visualizer-container:fullscreen .controls-bar,
+.visualizer-container:-webkit-full-screen .controls-bar {
+  transform: translateY(-100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.visualizer-container:fullscreen .keyboard-hints,
+.visualizer-container:-webkit-full-screen .keyboard-hints {
+  transform: translateX(-50%) translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Show controls when mouse moves (via JS class) */
+.visualizer-container:fullscreen.show-controls .controls-bar,
+.visualizer-container:-webkit-full-screen.show-controls .controls-bar {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.visualizer-container:fullscreen.show-controls .keyboard-hints,
+.visualizer-container:-webkit-full-screen.show-controls .keyboard-hints {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Hide dat.GUI in fullscreen by default */
+.visualizer-container:fullscreen~.dg.ac,
+.visualizer-container:-webkit-full-screen~.dg.ac {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* ============================================
    dat.GUI Override
    ============================================ */
 
 .dg.ac {
   z-index: 1000 !important;
+  transition: opacity 0.3s ease;
 }
 
 /* ============================================

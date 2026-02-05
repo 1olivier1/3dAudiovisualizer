@@ -174,8 +174,6 @@ class AudioVisualizer {
     this.barMeshes = [];
     this.particles = null;
     this.particleSystem = null;
-    this.particles = null;
-    this.particleSystem = null;
     this.waveformLines = [];
     this.waveHistory = [];
     this.backgroundStars = null;
@@ -736,8 +734,8 @@ class AudioVisualizer {
     themeFolder.add(this.params, 'theme', Object.keys(this.themes))
       .name('Preset')
       .onChange((theme) => this.applyTheme(theme));
-    themeFolder.addColor(this.params, 'primaryColor').name('Primary').onChange((c) => this.updateColors());
-    themeFolder.addColor(this.params, 'secondaryColor').name('Secondary').onChange((c) => this.updateColors());
+    themeFolder.addColor(this.params, 'primaryColor').name('Primary').listen().onChange((c) => this.updateColors());
+    themeFolder.addColor(this.params, 'secondaryColor').name('Secondary').listen().onChange((c) => this.updateColors());
 
     // Bloom
     const bloomFolder = gui.addFolder('Bloom');
@@ -1035,7 +1033,54 @@ class AudioVisualizer {
 
     document.addEventListener('fullscreenchange', () => {
       this.onWindowResize();
+      this.handleFullscreenUIVisibility();
     });
+
+    // Track mouse movement to show/hide controls in fullscreen
+    this.fullscreenControlsTimeout = null;
+    const container = document.querySelector('.visualizer-container');
+    if (container) {
+      container.addEventListener('mousemove', () => {
+        if (document.fullscreenElement) {
+          this.showFullscreenControls();
+        }
+      });
+    }
+  }
+
+  showFullscreenControls() {
+    const container = document.querySelector('.visualizer-container');
+    if (!container) return;
+
+    container.classList.add('show-controls');
+
+    // Clear any existing timeout
+    if (this.fullscreenControlsTimeout) {
+      clearTimeout(this.fullscreenControlsTimeout);
+    }
+
+    // Hide controls after 2 seconds of no mouse movement
+    this.fullscreenControlsTimeout = setTimeout(() => {
+      if (document.fullscreenElement) {
+        container.classList.remove('show-controls');
+      }
+    }, 2000);
+  }
+
+  handleFullscreenUIVisibility() {
+    const container = document.querySelector('.visualizer-container');
+    if (!container) return;
+
+    if (document.fullscreenElement) {
+      // Entering fullscreen - initially show controls briefly
+      this.showFullscreenControls();
+    } else {
+      // Exiting fullscreen - ensure controls are visible
+      container.classList.remove('show-controls');
+      if (this.fullscreenControlsTimeout) {
+        clearTimeout(this.fullscreenControlsTimeout);
+      }
+    }
   }
 
   toggleFullscreen() {
