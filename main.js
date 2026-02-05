@@ -176,6 +176,8 @@ class AudioVisualizer {
     this.particleSystem = null;
     this.waveformLines = [];
     this.waveHistory = [];
+    this.ringMesh = null;
+    this.ringUniforms = null;
     this.backgroundStars = null;
 
     // Post-processing
@@ -190,7 +192,12 @@ class AudioVisualizer {
     // Settings
     this.params = {
       // Visualization
-      mode: 'sphere', // sphere, bars, particles, waveform, combined
+      // Visualization Flags (Mix and Match)
+      showSphere: true,
+      showBars: false,
+      showParticles: false,
+      showWaveform: false,
+      showRing: false,
 
       // Colors
       primaryColor: '#33ffcc',
@@ -232,6 +239,12 @@ class AudioVisualizer {
       // Waveform
       waveCount: 20,
       waveSpacing: 0.5,
+
+      // Ring
+      ringRadius: 5,
+      ringTube: 0.2,
+      ringSegments: 128,
+      ringTubularSegments: 64,
 
       // Camera
       autoRotate: true,
@@ -377,6 +390,7 @@ class AudioVisualizer {
     this.createBars();
     this.createParticles();
     this.createWaveform();
+    this.createRing();
     this.createBackgroundStars();
     this.updateVisualizerVisibility();
   }
@@ -617,25 +631,116 @@ class AudioVisualizer {
     this.scene.add(this.backgroundStars);
   }
 
-  updateVisualizerVisibility() {
-    const mode = this.params.mode;
+  createRing() {
+    this.ringUniforms = {
+      uTime: { value: 0 },
+      uBass: { value: 0 },
+      uMid: { value: 0 },
+      uTreble: { value: 0 },
+      uColor1: { value: new THREE.Color(this.params.primaryColor) },
+      uColor2: { value: new THREE.Color(this.params.secondaryColor) }
+    };
 
+    const vertexShader = `
+      uniform float uTime;
+      uniform float uBass;
+      uniform float uMid;
+      uniform float uTreble;
+      
+      varying vec2 vUv;
+      varying float vDisplacement;
+      
+      void main() {
+        vUv = uv;
+        
+        vec3 newPosition = position;
+        
+        // Add some noise/displacement based on angle and audio
+        float angle = atan(position.y, position.x);
+        float radius = length(position.xy);
+        
+        // Displacement wave around the ring
+        float wave = sin(angle * 10.0 + uTime * 2.0) * uBass * 0.5;
+        wave += cos(angle * 20.0 - uTime) * uMid * 0.3;
+        
+        // Apply to tube radius
+        float tubeDisplacement = normal.z * wave;
+        newPosition += normal * tubeDisplacement;
+        
+        vDisplacement = wave; // Pass to fragment shader
+        
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+      }
+    `;
+
+    const fragmentShader = `
+      uniform vec3 uColor1;
+      uniform vec3 uColor2;
+      
+      varying float vDisplacement;
+      
+      void main() {
+        // glowing ring effect
+        float intensity = 0.5 + vDisplacement * 2.0;
+        vec3 color = mix(uColor1, uColor2, 0.5 + vDisplacement);
+        
+        gl_FragColor = vec4(color * intensity, 0.8);
+      }
+    `;
+
+    const geometry = new THREE.TorusGeometry(
+      this.params.ringRadius,
+      this.params.ringTube,
+      this.params.ringTubularSegments,
+      this.params.ringSegments
+    );
+
+    const material = new THREE.ShaderMaterial({
+      uniforms: this.ringUniforms,
+      vertexShader,
+      fragmentShader,
+      transparent: true,
+      wireframe: true,
+      side: THREE.DoubleSide
+    });
+
+    this.ringMesh = new THREE.Mesh(geometry, material);
+    this.ringMesh.rotation.x = Math.PI / 2; // Flat
+    this.scene.add(this.ringMesh);
+  }
+
+  rebuildRing() {
+    if (this.ringMesh) {
+      this.scene.remove(this.ringMesh);
+      this.ringMesh.geometry.dispose();
+      this.ringMesh.material.dispose();
+      this.ringMesh = null;
+    }
+    this.createRing();
+    this.updateVisualizerVisibility(); // Ensure it's visible if flag is true
+  }
+
+  updateVisualizerVisibility() {
     if (this.sphereMesh) {
-      this.sphereMesh.visible = mode === 'sphere' || mode === 'combined';
+      this.sphereMesh.visible = this.params.showSphere;
     }
 
     this.barMeshes.forEach(bar => {
-      bar.visible = mode === 'bars' || mode === 'combined';
+      bar.visible = this.params.showBars;
     });
 
     if (this.particleSystem) {
-      this.particleSystem.visible = mode === 'particles' || mode === 'combined';
+      this.particleSystem.visible = this.params.showParticles;
     }
 
     if (this.waveformLines && this.waveformLines.length > 0) {
       this.waveformLines.forEach(line => {
-        line.visible = mode === 'waveform' || mode === 'combined';
+        line.visible = this.params.showWaveform;
       });
+    }
+
+    if (this.ringMesh) {
+      this.ringMesh.visible = this.params.showRing;
     }
 
     if (this.backgroundStars) {
@@ -720,13 +825,24 @@ class AudioVisualizer {
   initGUI() {
     const gui = new dat.GUI({ width: 300 });
 
-    // Visualization Mode
-    const vizFolder = gui.addFolder('Visualization');
-    vizFolder.add(this.params, 'mode', ['sphere', 'bars', 'particles', 'waveform', 'combined'])
-      .name('Mode')
-      .onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'reactivity', 0.1, 3.0).name('Reactivity');
-    vizFolder.add(this.params, 'bassReactivity', 0.5, 3.0).name('Bass Reactivity');
+    // Visualization Mode - Mix and Match
+    const vizFolder = gui.addFolder('Active Visualizers');
+    vizFolder.add(this.params, 'showSphere').name('Show Sphere').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showBars').name('Show Bars').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showParticles').name('Show Particles').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showWaveform').name('Show Waveform').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showRing').name('Show Ring').onChange(() => this.updateVisualizerVisibility());
+
+    // Viz Controls (General)
+    const settingsFolder = gui.addFolder('Visualizer Settings');
+    settingsFolder.add(this.params, 'reactivity', 0.1, 3.0).name('Reactivity');
+    settingsFolder.add(this.params, 'bassReactivity', 0.5, 3.0).name('Bass Reactivity');
+
+    // Ring Settings
+    const ringFolder = gui.addFolder('Ring Settings');
+    ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
+    ringFolder.add(this.params, 'ringTube', 0.05, 1).name('Tube Thickness').onChange(() => this.rebuildRing());
+
     vizFolder.open();
 
     // Theme
@@ -1394,6 +1510,23 @@ class AudioVisualizer {
     });
   }
 
+  updateRing(time) {
+    if (!this.ringMesh || !this.ringUniforms) return;
+
+    this.ringUniforms.uTime.value = time;
+    this.ringUniforms.uBass.value = this.frequencyBands.bass;
+    this.ringUniforms.uMid.value = this.frequencyBands.mid;
+    this.ringUniforms.uTreble.value = this.frequencyBands.treble;
+
+    // Pulse scale with bass
+    const scale = 1 + this.frequencyBands.bass * 0.2;
+    this.ringMesh.scale.set(scale, scale, scale);
+
+    // Rotate ring
+    this.ringMesh.rotation.z += 0.005; // Spin around center
+    this.ringMesh.rotation.x = Math.PI / 2 + Math.sin(time * 0.5) * 0.2; // Wobble
+  }
+
   updateCamera(time) {
     // Auto rotate
     if (this.params.autoRotate) {
@@ -1449,6 +1582,7 @@ class AudioVisualizer {
     this.updateBars();
     this.updateParticles(time);
     this.updateWaveform();
+    this.updateRing(time);
     this.updateBackgroundStars(time);
 
     // Update camera
