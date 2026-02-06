@@ -346,7 +346,7 @@ class AudioVisualizer {
     this.initGUI();
     this.attachEventListeners();
     this.animate();
-    console.log('🎵 Audio Visualizer Ultimate initialized');
+    console.log('🎵 Audio Visualizer Ultimate initialized - v1.1.0');
   }
 
   initScene() {
