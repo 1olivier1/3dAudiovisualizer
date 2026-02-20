@@ -297,16 +297,31 @@ kbd {
   pointer-events: none;
 }
 
+/* Right-side dropdown control panel host */
+.gui-host {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  z-index: 2000;
+  pointer-events: auto;
+}
+
+/* dat.GUI layout tweaks when mounted in custom host */
+.gui-host .dg {
+  position: relative !important;
+  float: none !important;
+  margin: 0 !important;
+}
+
 /* Keep dat.GUI (right-side dropdown control panel) visible in fullscreen */
-.visualizer-container:fullscreen .dg.ac,
-.visualizer-container:-webkit-full-screen .dg.ac,
-.visualizer-container:fullscreen .dg,
-.visualizer-container:-webkit-full-screen .dg {
+.visualizer-container:fullscreen .gui-host,
+.visualizer-container:-webkit-full-screen .gui-host,
+.visualizer-container:fullscreen .gui-host .dg,
+.visualizer-container:-webkit-full-screen .gui-host .dg {
   opacity: 1 !important;
   visibility: visible !important;
   display: block !important;
   pointer-events: auto !important;
-  transition: opacity 0.3s ease;
   z-index: 2000 !important;
 }
 

@@ -823,13 +823,13 @@ class AudioVisualizer {
   }
 
   initGUI() {
-    const gui = new dat.GUI({ width: 300 });
+    const gui = new dat.GUI({ width: 300, autoPlace: false });
 
-    // Keep full dat.GUI wrapper inside the visualizer container so it remains visible in fullscreen
-    const container = document.querySelector('.visualizer-container');
-    const guiRoot = gui.domElement && gui.domElement.parentElement ? gui.domElement.parentElement : null;
-    if (container && guiRoot) {
-      container.appendChild(guiRoot);
+    // Mount dat.GUI into a dedicated host inside the fullscreen container
+    const guiHost = document.getElementById('guiHost');
+    if (guiHost && gui.domElement) {
+      guiHost.innerHTML = '';
+      guiHost.appendChild(gui.domElement);
     }
 
     // Visualization Mode - Mix and Match
