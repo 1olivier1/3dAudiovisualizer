@@ -279,10 +279,10 @@ kbd {
 }
 
 /* ============================================
-   Fullscreen Mode - Hide UI Elements
+   Fullscreen Mode - Only show dropdown panel
    ============================================ */
 
-/* In fullscreen, hide controls by default */
+/* Hide top controls + bottom hints in fullscreen */
 .visualizer-container:fullscreen .controls-bar,
 .visualizer-container:-webkit-full-screen .controls-bar {
   transform: translateY(-100%);
@@ -297,26 +297,11 @@ kbd {
   pointer-events: none;
 }
 
-/* Show controls when mouse moves (via JS class) */
-.visualizer-container:fullscreen.show-controls .controls-bar,
-.visualizer-container:-webkit-full-screen.show-controls .controls-bar {
-  transform: translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.visualizer-container:fullscreen.show-controls .keyboard-hints,
-.visualizer-container:-webkit-full-screen.show-controls .keyboard-hints {
-  transform: translateX(-50%) translateY(0);
-  opacity: 1;
-  pointer-events: auto;
-}
-
-/* Hide dat.GUI in fullscreen by default */
+/* Keep dat.GUI (right-side dropdown control panel) visible in fullscreen */
 .visualizer-container:fullscreen~.dg.ac,
 .visualizer-container:-webkit-full-screen~.dg.ac {
-  opacity: 0;
-  pointer-events: none;
+  opacity: 1;
+  pointer-events: auto;
   transition: opacity 0.3s ease;
 }
 
