@@ -197,11 +197,11 @@ class AudioVisualizer {
       // Visualization Flags (Mix and Match)
       showSphere: true,
       showBars: false,
-      showParticles: false,
-      showWaveform: false,
-      showRing: false,
-      showTunnel: false,
-      showPulsePlane: false,
+      showParticles: true,
+      showWaveform: true,
+      showRing: true,
+      showTunnel: true,
+      showPulsePlane: true,
 
       // Colors
       primaryColor: '#33ffcc',
@@ -210,14 +210,14 @@ class AudioVisualizer {
       theme: 'cyber', // cyber, vaporwave, minimal, fire, ocean
 
       // Bloom
-      bloomThreshold: 0.4,
-      bloomStrength: 1.8,
-      bloomRadius: 0.5,
+      bloomThreshold: 0.35,
+      bloomStrength: 2.2,
+      bloomRadius: 0.65,
 
       // Reactivity
-      reactivity: 1.0,
-      bassReactivity: 1.5,
-      beatSensitivity: 1.2,
+      reactivity: 1.35,
+      bassReactivity: 1.9,
+      beatSensitivity: 1.15,
       cameraShakeOnBeat: true,
       particlesOnBeat: true,
 
@@ -246,11 +246,11 @@ class AudioVisualizer {
 
       // Tunnel
       tunnelDepth: 36,
-      tunnelWidth: 14,
+      tunnelWidth: 16,
 
       // Pulse Plane
       planeSize: 18,
-      planeOpacity: 0.2,
+      planeOpacity: 0.26,
 
       // Ring
       ringRadius: 5,
@@ -264,8 +264,8 @@ class AudioVisualizer {
       cameraPulse: true,
 
       // Rainbow
-      rainbow: false,
-      rainbowSpeed: 0.5
+      rainbow: true,
+      rainbowSpeed: 0.9
     };
 
     // Themes
