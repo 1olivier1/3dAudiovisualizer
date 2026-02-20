@@ -825,6 +825,12 @@ class AudioVisualizer {
   initGUI() {
     const gui = new dat.GUI({ width: 300 });
 
+    // Keep GUI inside the visualizer container so it remains visible in fullscreen
+    const container = document.querySelector('.visualizer-container');
+    if (container && gui.domElement) {
+      container.appendChild(gui.domElement);
+    }
+
     // Visualization Mode - Mix and Match
     const vizFolder = gui.addFolder('Active Visualizers');
     vizFolder.add(this.params, 'showSphere').name('Show Sphere').onChange(() => this.updateVisualizerVisibility());
