@@ -179,6 +179,8 @@ class AudioVisualizer {
     this.ringMesh = null;
     this.ringUniforms = null;
     this.backgroundStars = null;
+    this.tunnelLines = [];
+    this.pulsePlane = null;
 
     // Post-processing
     this.composer = null;
@@ -198,6 +200,8 @@ class AudioVisualizer {
       showParticles: false,
       showWaveform: false,
       showRing: false,
+      showTunnel: false,
+      showPulsePlane: false,
 
       // Colors
       primaryColor: '#33ffcc',
@@ -239,6 +243,14 @@ class AudioVisualizer {
       // Waveform
       waveCount: 20,
       waveSpacing: 0.5,
+
+      // Tunnel
+      tunnelDepth: 36,
+      tunnelWidth: 14,
+
+      // Pulse Plane
+      planeSize: 18,
+      planeOpacity: 0.2,
 
       // Ring
       ringRadius: 5,
@@ -391,6 +403,8 @@ class AudioVisualizer {
     this.createParticles();
     this.createWaveform();
     this.createRing();
+    this.createTunnel();
+    this.createPulsePlane();
     this.createBackgroundStars();
     this.updateVisualizerVisibility();
   }
@@ -606,6 +620,46 @@ class AudioVisualizer {
   }
 
 
+  createTunnel() {
+    this.tunnelLines = [];
+
+    for (let i = 0; i < this.params.tunnelDepth; i++) {
+      const z = -i * 1.1;
+      const geometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-this.params.tunnelWidth / 2, 0, z),
+        new THREE.Vector3(this.params.tunnelWidth / 2, 0, z)
+      ]);
+
+      const material = new THREE.LineBasicMaterial({
+        color: this.params.secondaryColor,
+        transparent: true,
+        opacity: Math.max(0.08, 1 - i / this.params.tunnelDepth)
+      });
+
+      const line = new THREE.Line(geometry, material);
+      line.userData.baseZ = z;
+      line.userData.index = i;
+      this.tunnelLines.push(line);
+      this.scene.add(line);
+    }
+  }
+
+  createPulsePlane() {
+    const geometry = new THREE.PlaneGeometry(this.params.planeSize, this.params.planeSize, 40, 40);
+    const material = new THREE.MeshBasicMaterial({
+      color: this.params.accentColor,
+      wireframe: true,
+      transparent: true,
+      opacity: this.params.planeOpacity
+    });
+
+    this.pulsePlane = new THREE.Mesh(geometry, material);
+    this.pulsePlane.rotation.x = -Math.PI / 2;
+    this.pulsePlane.position.y = -2.8;
+    this.pulsePlane.position.z = -3;
+    this.scene.add(this.pulsePlane);
+  }
+
   createBackgroundStars() {
     const count = this.params.starCount;
     const positions = new Float32Array(count * 3);
@@ -743,6 +797,16 @@ class AudioVisualizer {
       this.ringMesh.visible = this.params.showRing;
     }
 
+    if (this.tunnelLines && this.tunnelLines.length > 0) {
+      this.tunnelLines.forEach(line => {
+        line.visible = this.params.showTunnel;
+      });
+    }
+
+    if (this.pulsePlane) {
+      this.pulsePlane.visible = this.params.showPulsePlane;
+    }
+
     if (this.backgroundStars) {
       this.backgroundStars.visible = this.params.showStars;
     }
@@ -839,6 +903,8 @@ class AudioVisualizer {
     vizFolder.add(this.params, 'showParticles').name('Show Particles').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showWaveform').name('Show Waveform').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showRing').name('Show Ring').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showTunnel').name('Show Tunnel').onChange(() => this.updateVisualizerVisibility());
+    vizFolder.add(this.params, 'showPulsePlane').name('Show Pulse Plane').onChange(() => this.updateVisualizerVisibility());
 
     // Viz Controls (General)
     const settingsFolder = gui.addFolder('Visualizer Settings');
@@ -849,6 +915,14 @@ class AudioVisualizer {
     const ringFolder = gui.addFolder('Ring Settings');
     ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
     ringFolder.add(this.params, 'ringTube', 0.05, 1).name('Tube Thickness').onChange(() => this.rebuildRing());
+
+    const tunnelFolder = gui.addFolder('Tunnel Settings');
+    tunnelFolder.add(this.params, 'tunnelWidth', 8, 24).name('Width');
+
+    const planeFolder = gui.addFolder('Pulse Plane Settings');
+    planeFolder.add(this.params, 'planeOpacity', 0.05, 0.8).name('Opacity').onChange((v) => {
+      if (this.pulsePlane) this.pulsePlane.material.opacity = v;
+    });
 
     vizFolder.open();
 
@@ -920,6 +994,16 @@ class AudioVisualizer {
       this.waveformLines.forEach(line => {
         line.material.color = primary;
       });
+    }
+
+    if (this.tunnelLines && this.tunnelLines.length > 0) {
+      this.tunnelLines.forEach((line, i) => {
+        line.material.color = primary.clone().lerp(secondary, i / this.tunnelLines.length);
+      });
+    }
+
+    if (this.pulsePlane) {
+      this.pulsePlane.material.color = new THREE.Color(this.params.accentColor);
     }
   }
 
@@ -1534,6 +1618,42 @@ class AudioVisualizer {
     this.ringMesh.rotation.x = Math.PI / 2 + Math.sin(time * 0.5) * 0.2; // Wobble
   }
 
+  updateTunnel(time) {
+    if (!this.tunnelLines || this.tunnelLines.length === 0) return;
+
+    const bass = this.frequencyBands.bass;
+    const wave = (this.frequencyBands.mid + this.frequencyBands.treble) * 0.8;
+
+    this.tunnelLines.forEach((line, i) => {
+      const positions = line.geometry.attributes.position.array;
+      const z = line.userData.baseZ;
+      const y = Math.sin(time * 2 + i * 0.35) * (0.3 + bass * 1.2);
+      const width = this.params.tunnelWidth * (0.5 + wave * 0.5);
+
+      positions[0] = -width / 2;
+      positions[1] = y;
+      positions[2] = z;
+      positions[3] = width / 2;
+      positions[4] = -y;
+      positions[5] = z;
+      line.geometry.attributes.position.needsUpdate = true;
+
+      line.material.opacity = Math.max(0.08, 1 - i / this.tunnelLines.length) * (0.6 + bass * 0.8);
+    });
+  }
+
+  updatePulsePlane(time) {
+    if (!this.pulsePlane) return;
+
+    const bass = this.frequencyBands.bass;
+    const beat = this.beatDetector.lastBeat;
+    const scale = 1 + bass * 0.35 + beat * 0.25;
+
+    this.pulsePlane.scale.set(scale, scale, 1);
+    this.pulsePlane.rotation.z = Math.sin(time * 0.6) * 0.1;
+    this.pulsePlane.material.opacity = Math.min(0.95, this.params.planeOpacity + bass * 0.35);
+  }
+
   updateCamera(time) {
     // Auto rotate
     if (this.params.autoRotate) {
@@ -1568,7 +1688,9 @@ class AudioVisualizer {
     this.camera.aspect = window.innerWidth / window.innerHeight;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.composer.setSize(window.innerWidth, window.innerHeight);
+    if (this.composer) {
+      this.composer.setSize(window.innerWidth, window.innerHeight);
+    }
   }
 
   animate() {
@@ -1590,6 +1712,8 @@ class AudioVisualizer {
     this.updateParticles(time);
     this.updateWaveform();
     this.updateRing(time);
+    this.updateTunnel(time);
+    this.updatePulsePlane(time);
     this.updateBackgroundStars(time);
 
     // Update camera
