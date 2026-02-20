@@ -825,10 +825,11 @@ class AudioVisualizer {
   initGUI() {
     const gui = new dat.GUI({ width: 300 });
 
-    // Keep GUI inside the visualizer container so it remains visible in fullscreen
+    // Keep full dat.GUI wrapper inside the visualizer container so it remains visible in fullscreen
     const container = document.querySelector('.visualizer-container');
-    if (container && gui.domElement) {
-      container.appendChild(gui.domElement);
+    const guiRoot = gui.domElement && gui.domElement.parentElement ? gui.domElement.parentElement : null;
+    if (container && guiRoot) {
+      container.appendChild(guiRoot);
     }
 
     // Visualization Mode - Mix and Match
