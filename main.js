@@ -1716,8 +1716,13 @@ class AudioVisualizer {
     this.ringUniforms.uMid.value = this.frequencyBands.mid;
     this.ringUniforms.uTreble.value = this.frequencyBands.treble;
 
-    // Continuous ring color cycling (independent from size changes)
-    if (this.params.ringColorCycle) {
+    // Streamlined color logic:
+    // - If global rainbow is on, ring follows global palette (no extra ring-only cycle).
+    // - Ring-only cycle is used only when rainbow is off.
+    if (this.params.rainbow) {
+      this.ringUniforms.uColor1.value.set(this.params.primaryColor);
+      this.ringUniforms.uColor2.value.set(this.params.secondaryColor);
+    } else if (this.params.ringColorCycle) {
       const speed = this.params.ringColorSpeed;
       const hue1 = (time * speed * 0.08) % 1;
       const hue2 = (hue1 + 0.28 + this.frequencyBands.bass * 0.1) % 1;
