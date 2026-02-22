@@ -985,8 +985,14 @@ class AudioVisualizer {
       guiHost.appendChild(gui.domElement);
     }
 
+    // Menu within menu (cleaner control layout)
+    const visualsMenu = gui.addFolder('🎛️ Visuals');
+    const lookMenu = gui.addFolder('🎨 Look & Color');
+    const motionMenu = gui.addFolder('🎬 Motion & Camera');
+    const systemMenu = gui.addFolder('⚙️ System');
+
     // Visualization Mode - Mix and Match
-    const vizFolder = gui.addFolder('Active Visualizers');
+    const vizFolder = visualsMenu.addFolder('Active Visualizers');
     vizFolder.add(this.params, 'showSphere').name('Show Sphere').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showBars').name('Show Bars').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showParticles').name('Show Particles').onChange(() => this.updateVisualizerVisibility());
@@ -995,7 +1001,7 @@ class AudioVisualizer {
     vizFolder.add(this.params, 'showTunnel').name('Show Tunnel').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showPulsePlane').name('Show Pulse Plane').onChange(() => this.updateVisualizerVisibility());
 
-    const barsFolder = gui.addFolder('Bar Settings');
+    const barsFolder = visualsMenu.addFolder('Bar Settings');
     barsFolder.add(this.params, 'barStyle', ['radial', 'vertical', 'wall'])
       .name('Bar Style')
       .onChange(() => this.rebuildBars());
@@ -1007,12 +1013,12 @@ class AudioVisualizer {
       .onFinishChange(() => this.rebuildBars());
 
     // Viz Controls (General)
-    const settingsFolder = gui.addFolder('Visualizer Settings');
+    const settingsFolder = visualsMenu.addFolder('Visualizer Settings');
     settingsFolder.add(this.params, 'reactivity', 0.1, 3.0).name('Reactivity');
     settingsFolder.add(this.params, 'bassReactivity', 0.5, 3.0).name('Bass Reactivity');
 
     // Performance
-    const perfFolder = gui.addFolder('Performance');
+    const perfFolder = systemMenu.addFolder('Performance');
     perfFolder.add(this.params, 'performanceMode', ['low', 'balanced', 'high'])
       .name('Preset')
       .onChange((mode) => this.applyPerformancePreset(mode));
@@ -1024,16 +1030,16 @@ class AudioVisualizer {
       .onFinishChange(() => this.rebuildStars());
 
     // Ring Settings
-    const ringFolder = gui.addFolder('Ring Settings');
+    const ringFolder = visualsMenu.addFolder('Ring Settings');
     ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
     ringFolder.add(this.params, 'ringTube', 0.05, 1).name('Tube Thickness').onChange(() => this.rebuildRing());
     ringFolder.add(this.params, 'ringColorCycle').name('Color Cycle');
     ringFolder.add(this.params, 'ringColorSpeed', 0.1, 4.0).name('Color Speed');
 
-    const tunnelFolder = gui.addFolder('Tunnel Settings');
+    const tunnelFolder = visualsMenu.addFolder('Tunnel Settings');
     tunnelFolder.add(this.params, 'tunnelWidth', 8, 24).name('Width');
 
-    const planeFolder = gui.addFolder('Pulse Plane Settings');
+    const planeFolder = visualsMenu.addFolder('Pulse Plane Settings');
     planeFolder.add(this.params, 'planeOpacity', 0.05, 0.8).name('Opacity').onChange((v) => {
       if (this.pulsePlane) this.pulsePlane.material.opacity = v;
     });
@@ -1041,7 +1047,7 @@ class AudioVisualizer {
     vizFolder.open();
 
     // Theme
-    const themeFolder = gui.addFolder('Theme');
+    const themeFolder = lookMenu.addFolder('Theme');
     themeFolder.add(this.params, 'theme', Object.keys(this.themes))
       .name('Preset')
       .onChange((theme) => this.applyTheme(theme));
@@ -1049,39 +1055,44 @@ class AudioVisualizer {
     themeFolder.addColor(this.params, 'secondaryColor').name('Secondary').listen().onChange((c) => this.updateColors());
 
     // Bloom
-    const bloomFolder = gui.addFolder('Bloom');
+    const bloomFolder = lookMenu.addFolder('Bloom');
     bloomFolder.add(this.params, 'bloomThreshold', 0, 1).name('Threshold').onChange((v) => this.bloomPass.threshold = v);
     bloomFolder.add(this.params, 'bloomStrength', 0, 3).name('Strength').onChange((v) => this.bloomPass.strength = v);
     bloomFolder.add(this.params, 'bloomRadius', 0, 1).name('Radius').onChange((v) => this.bloomPass.radius = v);
 
     // Effects
-    const fxFolder = gui.addFolder('Effects');
+    const fxFolder = motionMenu.addFolder('Effects');
     fxFolder.add(this.params, 'cameraShakeOnBeat').name('Camera Shake');
     fxFolder.add(this.params, 'particlesOnBeat').name('Particle Burst');
     fxFolder.add(this.params, 'autoRotate').name('Auto Rotate');
     fxFolder.add(this.params, 'showStars').name('Stars').onChange(() => this.updateVisualizerVisibility());
 
-    const cameraFolder = gui.addFolder('Camera Director');
+    const cameraFolder = motionMenu.addFolder('Camera Director');
     cameraFolder.add(this.params, 'cameraChoreo').name('Auto Cam Choreo');
     cameraFolder.add(this.params, 'cameraChoreoMode', ['orbit', 'pulse', 'drift']).name('Mode');
 
-    const sectionFolder = gui.addFolder('Section Director');
+    const sectionFolder = motionMenu.addFolder('Section Director');
     sectionFolder.add(this.params, 'sectionAware').name('Auto Section Switch');
 
-    const presetFolder = gui.addFolder('Presets');
+    const presetFolder = systemMenu.addFolder('Presets');
     presetFolder.add(this, 'savePresetToFile').name('💾 Save Preset (.json)');
     presetFolder.add(this, 'loadPresetFromFile').name('📂 Load Preset (.json)');
 
     // Audio
-    const audioFolder = gui.addFolder('Audio');
+    const audioFolder = systemMenu.addFolder('Audio');
     audioFolder.add(this, 'toggleMicrophone').name('🎤 Use Microphone');
     audioFolder.add(this, 'toggleDesktopAudio').name('🖥️ Desktop Audio');
     audioFolder.add(this.params, 'beatSensitivity', 0.5, 2.0).name('Beat Sensitivity');
 
     // Rainbow Colors
-    const rainbowFolder = gui.addFolder('🌈 Rainbow Effect');
+    const rainbowFolder = lookMenu.addFolder('🌈 Rainbow Effect');
     rainbowFolder.add(this.params, 'rainbow').name('Enable Rainbow');
     rainbowFolder.add(this.params, 'rainbowSpeed', 0.1, 5.0).name('Speed');
+
+    visualsMenu.open();
+    lookMenu.close();
+    motionMenu.close();
+    systemMenu.close();
 
     gui.close();
   }
