@@ -261,6 +261,8 @@ class AudioVisualizer {
       ringTube: 0.2,
       ringSegments: 128,
       ringTubularSegments: 64,
+      ringColorCycle: true,
+      ringColorSpeed: 1.2,
 
       // Camera
       autoRotate: true,
@@ -1018,6 +1020,8 @@ class AudioVisualizer {
     const ringFolder = gui.addFolder('Ring Settings');
     ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
     ringFolder.add(this.params, 'ringTube', 0.05, 1).name('Tube Thickness').onChange(() => this.rebuildRing());
+    ringFolder.add(this.params, 'ringColorCycle').name('Color Cycle');
+    ringFolder.add(this.params, 'ringColorSpeed', 0.1, 4.0).name('Color Speed');
 
     const tunnelFolder = gui.addFolder('Tunnel Settings');
     tunnelFolder.add(this.params, 'tunnelWidth', 8, 24).name('Width');
@@ -1711,6 +1715,18 @@ class AudioVisualizer {
     this.ringUniforms.uBass.value = this.frequencyBands.bass;
     this.ringUniforms.uMid.value = this.frequencyBands.mid;
     this.ringUniforms.uTreble.value = this.frequencyBands.treble;
+
+    // Continuous ring color cycling (independent from size changes)
+    if (this.params.ringColorCycle) {
+      const speed = this.params.ringColorSpeed;
+      const hue1 = (time * speed * 0.08) % 1;
+      const hue2 = (hue1 + 0.28 + this.frequencyBands.bass * 0.1) % 1;
+      this.ringUniforms.uColor1.value.setHSL(hue1, 0.9, 0.55);
+      this.ringUniforms.uColor2.value.setHSL(hue2, 0.9, 0.6);
+    } else {
+      this.ringUniforms.uColor1.value.set(this.params.primaryColor);
+      this.ringUniforms.uColor2.value.set(this.params.secondaryColor);
+    }
 
     // Pulse scale with bass
     const scale = 1 + this.frequencyBands.bass * 0.2;
