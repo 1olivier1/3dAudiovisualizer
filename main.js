@@ -230,7 +230,7 @@ class AudioVisualizer {
       barCount: 64,
       barSpacing: 0.15,
       barWidth: 0.1,
-      barStyle: 'radial', // radial, vertical
+      barStyle: 'radial', // radial, vertical, wall
 
       // Particles
       particleCount: 1400,
@@ -528,6 +528,16 @@ class AudioVisualizer {
         const totalWidth = (barCount - 1) * this.params.barSpacing;
         bar.position.x = -totalWidth / 2 + i * this.params.barSpacing;
         bar.position.z = 0;
+        bar.rotation.y = 0;
+      } else if (this.params.barStyle === 'wall') {
+        const cols = Math.ceil(Math.sqrt(barCount));
+        const rows = Math.ceil(barCount / cols);
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+
+        const xSpan = (cols - 1) * this.params.barSpacing;
+        bar.position.x = -xSpan / 2 + col * this.params.barSpacing;
+        bar.position.z = -(row - (rows - 1) / 2) * this.params.barSpacing;
         bar.rotation.y = 0;
       } else {
         // radial
@@ -977,7 +987,7 @@ class AudioVisualizer {
     vizFolder.add(this.params, 'showPulsePlane').name('Show Pulse Plane').onChange(() => this.updateVisualizerVisibility());
 
     const barsFolder = gui.addFolder('Bar Settings');
-    barsFolder.add(this.params, 'barStyle', ['radial', 'vertical'])
+    barsFolder.add(this.params, 'barStyle', ['radial', 'vertical', 'wall'])
       .name('Bar Style')
       .onChange(() => this.rebuildBars());
     barsFolder.add(this.params, 'barCount', 16, 128, 1)
