@@ -230,6 +230,7 @@ class AudioVisualizer {
       barCount: 64,
       barSpacing: 0.15,
       barWidth: 0.1,
+      barStyle: 'radial', // radial, vertical
 
       // Particles
       particleCount: 1400,
@@ -522,9 +523,19 @@ class AudioVisualizer {
       });
 
       const bar = new THREE.Mesh(geometry, material);
-      bar.position.x = Math.cos(angle) * radius;
-      bar.position.z = Math.sin(angle) * radius;
-      bar.rotation.y = -angle;
+
+      if (this.params.barStyle === 'vertical') {
+        const totalWidth = (barCount - 1) * this.params.barSpacing;
+        bar.position.x = -totalWidth / 2 + i * this.params.barSpacing;
+        bar.position.z = 0;
+        bar.rotation.y = 0;
+      } else {
+        // radial
+        bar.position.x = Math.cos(angle) * radius;
+        bar.position.z = Math.sin(angle) * radius;
+        bar.rotation.y = -angle;
+      }
+
       bar.userData.index = i;
       bar.userData.baseY = 0;
 
@@ -779,6 +790,17 @@ class AudioVisualizer {
     this.updateVisualizerVisibility(); // Ensure it's visible if flag is true
   }
 
+  rebuildBars() {
+    this.barMeshes.forEach(bar => {
+      this.scene.remove(bar);
+      bar.geometry.dispose();
+      bar.material.dispose();
+    });
+    this.barMeshes = [];
+    this.createBars();
+    this.updateVisualizerVisibility();
+  }
+
   rebuildParticles() {
     if (this.particleSystem) {
       this.scene.remove(this.particleSystem);
@@ -953,6 +975,17 @@ class AudioVisualizer {
     vizFolder.add(this.params, 'showRing').name('Show Ring').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showTunnel').name('Show Tunnel').onChange(() => this.updateVisualizerVisibility());
     vizFolder.add(this.params, 'showPulsePlane').name('Show Pulse Plane').onChange(() => this.updateVisualizerVisibility());
+
+    const barsFolder = gui.addFolder('Bar Settings');
+    barsFolder.add(this.params, 'barStyle', ['radial', 'vertical'])
+      .name('Bar Style')
+      .onChange(() => this.rebuildBars());
+    barsFolder.add(this.params, 'barCount', 16, 128, 1)
+      .name('Bar Count')
+      .onFinishChange(() => this.rebuildBars());
+    barsFolder.add(this.params, 'barSpacing', 0.08, 0.35, 0.01)
+      .name('Bar Spacing')
+      .onFinishChange(() => this.rebuildBars());
 
     // Viz Controls (General)
     const settingsFolder = gui.addFolder('Visualizer Settings');
