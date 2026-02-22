@@ -165,6 +165,8 @@ class AudioVisualizer {
     this.dataArray = null;
     this.frequencyBands = { bass: 0, mid: 0, treble: 0, average: 0 };
     this.beatDetector = { threshold: 1.2, decay: 0.98, lastBeat: 0, energy: 0, beatCooldown: 0 };
+    this.sectionDirector = { mode: 'calm', holdUntil: 0, beatHits: 0, lastSwitch: 0 };
+    this.camChoreoState = { targetRadius: 5, targetPhi: Math.PI / 2, targetSpeed: 0.3 };
     this.isPlaying = false;
     this.useMicrophone = false;
 
@@ -268,6 +270,11 @@ class AudioVisualizer {
       autoRotate: true,
       autoRotateSpeed: 0.3,
       cameraPulse: true,
+      cameraChoreo: true,
+      cameraChoreoMode: 'orbit', // orbit, pulse, drift
+
+      // Section-aware mode switching
+      sectionAware: true,
 
       // Rainbow
       rainbow: true,
@@ -1054,6 +1061,17 @@ class AudioVisualizer {
     fxFolder.add(this.params, 'autoRotate').name('Auto Rotate');
     fxFolder.add(this.params, 'showStars').name('Stars').onChange(() => this.updateVisualizerVisibility());
 
+    const cameraFolder = gui.addFolder('Camera Director');
+    cameraFolder.add(this.params, 'cameraChoreo').name('Auto Cam Choreo');
+    cameraFolder.add(this.params, 'cameraChoreoMode', ['orbit', 'pulse', 'drift']).name('Mode');
+
+    const sectionFolder = gui.addFolder('Section Director');
+    sectionFolder.add(this.params, 'sectionAware').name('Auto Section Switch');
+
+    const presetFolder = gui.addFolder('Presets');
+    presetFolder.add(this, 'savePresetToFile').name('💾 Save Preset (.json)');
+    presetFolder.add(this, 'loadPresetFromFile').name('📂 Load Preset (.json)');
+
     // Audio
     const audioFolder = gui.addFolder('Audio');
     audioFolder.add(this, 'toggleMicrophone').name('🎤 Use Microphone');
@@ -1218,6 +1236,65 @@ class AudioVisualizer {
       .catch(err => {
         console.error('Desktop Audio error:', err);
       });
+  }
+
+  getPresetSnapshot() {
+    return {
+      params: { ...this.params }
+    };
+  }
+
+  applyPresetSnapshot(snapshot) {
+    if (!snapshot || !snapshot.params) return;
+
+    Object.assign(this.params, snapshot.params);
+    this.applyTheme(this.params.theme);
+
+    if (this.bloomPass) {
+      this.bloomPass.threshold = this.params.bloomThreshold;
+      this.bloomPass.strength = this.params.bloomStrength;
+      this.bloomPass.radius = this.params.bloomRadius;
+    }
+
+    this.rebuildBars();
+    this.rebuildRing();
+    this.rebuildParticles();
+    this.rebuildStars();
+    this.applyPerformancePreset(this.params.performanceMode || 'balanced');
+    this.updateVisualizerVisibility();
+  }
+
+  savePresetToFile() {
+    const payload = this.getPresetSnapshot();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `visualizer-preset-${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  loadPresetFromFile() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(reader.result);
+          this.applyPresetSnapshot(parsed);
+        } catch (err) {
+          console.error('Invalid preset JSON:', err);
+          alert('Invalid preset file');
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
   }
 
   attachEventListeners() {
@@ -1548,6 +1625,8 @@ class AudioVisualizer {
   }
 
   onBeat() {
+    this.sectionDirector.beatHits++;
+
     // Camera shake
     if (this.params.cameraShakeOnBeat) {
       this.cameraShake.intensity = 0.1;
@@ -1778,9 +1857,76 @@ class AudioVisualizer {
     this.pulsePlane.material.opacity = Math.min(0.95, this.params.planeOpacity + bass * 0.35);
   }
 
+  applySectionPreset(mode) {
+    if (mode === 'drop') {
+      this.params.showBars = true;
+      this.params.showRing = true;
+      this.params.showTunnel = true;
+      this.params.showWaveform = false;
+    } else if (mode === 'build') {
+      this.params.showBars = false;
+      this.params.showRing = true;
+      this.params.showTunnel = true;
+      this.params.showWaveform = true;
+    } else {
+      this.params.showBars = false;
+      this.params.showRing = true;
+      this.params.showTunnel = false;
+      this.params.showWaveform = true;
+    }
+    this.updateVisualizerVisibility();
+  }
+
+  updateSectionDirector(time) {
+    if (!this.params.sectionAware) return;
+    if (time < this.sectionDirector.holdUntil) return;
+
+    const energy = this.frequencyBands.average;
+    let nextMode = 'calm';
+    if (energy > 0.45 || this.sectionDirector.beatHits >= 3) {
+      nextMode = 'drop';
+    } else if (energy > 0.24) {
+      nextMode = 'build';
+    }
+
+    if (nextMode !== this.sectionDirector.mode && (time - this.sectionDirector.lastSwitch > 3)) {
+      this.sectionDirector.mode = nextMode;
+      this.sectionDirector.lastSwitch = time;
+      this.sectionDirector.holdUntil = time + 6;
+      this.sectionDirector.beatHits = 0;
+      this.applySectionPreset(nextMode);
+    }
+  }
+
+  updateCameraChoreo(time) {
+    if (!this.params.cameraChoreo || !this.sphericalCoords) return;
+
+    const beat = this.beatDetector.lastBeat;
+    const bass = this.frequencyBands.bass;
+
+    if (this.params.cameraChoreoMode === 'drift') {
+      this.camChoreoState.targetRadius = 6.2 + Math.sin(time * 0.18) * 1.0;
+      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.35 + Math.sin(time * 0.2) * 0.25, 0.04);
+      this.sphericalCoords.theta += 0.002 + bass * 0.003;
+    } else if (this.params.cameraChoreoMode === 'pulse') {
+      this.camChoreoState.targetRadius = 4.2 + beat * 2.4 + bass * 0.8;
+      this.sphericalCoords.theta += 0.004 + beat * 0.012;
+      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.55 + Math.sin(time * 0.9) * 0.12, 0.08);
+    } else {
+      // orbit
+      this.camChoreoState.targetRadius = 5.2 + Math.sin(time * 0.45) * 0.45 + bass * 0.45;
+      this.sphericalCoords.theta += 0.0035 + bass * 0.004;
+      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.45 + Math.sin(time * 0.35) * 0.18, 0.05);
+    }
+
+    this.sphericalCoords.radius = THREE.MathUtils.lerp(this.sphericalCoords.radius, this.camChoreoState.targetRadius, 0.08);
+    this.updateCameraPosition(this.sphericalCoords);
+  }
+
   updateCamera(time) {
-    // Auto rotate
-    if (this.params.autoRotate) {
+    if (this.params.cameraChoreo) {
+      this.updateCameraChoreo(time);
+    } else if (this.params.autoRotate) {
       this.sphericalCoords.theta += this.params.autoRotateSpeed * 0.01;
       this.updateCameraPosition(this.sphericalCoords);
     }
@@ -1829,6 +1975,7 @@ class AudioVisualizer {
 
     // Analyze audio
     this.analyzeFrequencies();
+    this.updateSectionDirector(time);
 
     // Update visualizers
     this.updateSphere(time);
