@@ -210,9 +210,9 @@ class AudioVisualizer {
       theme: 'cyber', // cyber, vaporwave, minimal, fire, ocean
 
       // Bloom
-      bloomThreshold: 0.35,
-      bloomStrength: 2.2,
-      bloomRadius: 0.65,
+      bloomThreshold: 0.45,
+      bloomStrength: 1.45,
+      bloomRadius: 0.5,
 
       // Reactivity
       reactivity: 1.35,
@@ -232,13 +232,16 @@ class AudioVisualizer {
       barWidth: 0.1,
 
       // Particles
-      particleCount: 2000,
+      particleCount: 1400,
       particleSize: 0.05,
       particleSpeed: 0.02,
 
+      // Performance
+      performanceMode: 'balanced', // low, balanced, high
+
       // Background
       showStars: true,
-      starCount: 1000,
+      starCount: 700,
 
       // Waveform
       waveCount: 20,
@@ -356,6 +359,7 @@ class AudioVisualizer {
     this.initPostProcessing();
     this.initControls();
     this.initGUI();
+    this.applyPerformancePreset(this.params.performanceMode);
     this.attachEventListeners();
     this.animate();
     console.log('🎵 Audio Visualizer Ultimate initialized - v1.1.0');
@@ -474,11 +478,12 @@ class AudioVisualizer {
       varying float vDisplacement;
       
       void main() {
-        // Gradient based on displacement
-        vec3 color = mix(uColor1, uColor2, vDisplacement * 2.0);
+        // Gradient based on displacement (clamped to avoid blown highlights)
+        float mixAmt = clamp(vDisplacement * 1.2 + 0.5, 0.0, 1.0);
+        vec3 color = mix(uColor1, uColor2, mixAmt);
         
-        // Add glow on beat
-        color += uBeat * 0.5;
+        // Add beat glow (tempered)
+        color += uBeat * 0.22;
         
         // Fresnel effect
         vec3 viewDir = normalize(cameraPosition - vPosition);
@@ -774,6 +779,49 @@ class AudioVisualizer {
     this.updateVisualizerVisibility(); // Ensure it's visible if flag is true
   }
 
+  rebuildParticles() {
+    if (this.particleSystem) {
+      this.scene.remove(this.particleSystem);
+      this.particleSystem.geometry.dispose();
+      this.particleSystem.material.dispose();
+      this.particleSystem = null;
+      this.particles = null;
+    }
+    this.createParticles();
+    this.updateVisualizerVisibility();
+  }
+
+  rebuildStars() {
+    if (this.backgroundStars) {
+      this.scene.remove(this.backgroundStars);
+      this.backgroundStars.geometry.dispose();
+      this.backgroundStars.material.dispose();
+      this.backgroundStars = null;
+    }
+    this.createBackgroundStars();
+    this.updateVisualizerVisibility();
+  }
+
+  applyPerformancePreset(mode) {
+    const presets = {
+      low: { particleCount: 700, starCount: 350, pixelRatioCap: 1.0 },
+      balanced: { particleCount: 1400, starCount: 700, pixelRatioCap: 1.5 },
+      high: { particleCount: 2400, starCount: 1200, pixelRatioCap: 2.0 }
+    };
+
+    const preset = presets[mode] || presets.balanced;
+    this.params.performanceMode = mode;
+    this.params.particleCount = preset.particleCount;
+    this.params.starCount = preset.starCount;
+
+    if (this.renderer) {
+      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatioCap));
+    }
+
+    this.rebuildParticles();
+    this.rebuildStars();
+  }
+
   updateVisualizerVisibility() {
     if (this.sphereMesh) {
       this.sphereMesh.visible = this.params.showSphere;
@@ -911,6 +959,18 @@ class AudioVisualizer {
     settingsFolder.add(this.params, 'reactivity', 0.1, 3.0).name('Reactivity');
     settingsFolder.add(this.params, 'bassReactivity', 0.5, 3.0).name('Bass Reactivity');
 
+    // Performance
+    const perfFolder = gui.addFolder('Performance');
+    perfFolder.add(this.params, 'performanceMode', ['low', 'balanced', 'high'])
+      .name('Preset')
+      .onChange((mode) => this.applyPerformancePreset(mode));
+    perfFolder.add(this.params, 'particleCount', 300, 4000, 50)
+      .name('Particle Count')
+      .onFinishChange(() => this.rebuildParticles());
+    perfFolder.add(this.params, 'starCount', 100, 3000, 50)
+      .name('Star Count')
+      .onFinishChange(() => this.rebuildStars());
+
     // Ring Settings
     const ringFolder = gui.addFolder('Ring Settings');
     ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
@@ -936,9 +996,9 @@ class AudioVisualizer {
 
     // Bloom
     const bloomFolder = gui.addFolder('Bloom');
-    bloomFolder.add(this.params, 'bloomThreshold', 0, 1).onChange((v) => this.bloomPass.threshold = v);
-    bloomFolder.add(this.params, 'bloomStrength', 0, 3).onChange((v) => this.bloomPass.strength = v);
-    bloomFolder.add(this.params, 'bloomRadius', 0, 1).onChange((v) => this.bloomPass.radius = v);
+    bloomFolder.add(this.params, 'bloomThreshold', 0, 1).name('Threshold').onChange((v) => this.bloomPass.threshold = v);
+    bloomFolder.add(this.params, 'bloomStrength', 0, 3).name('Strength').onChange((v) => this.bloomPass.strength = v);
+    bloomFolder.add(this.params, 'bloomRadius', 0, 1).name('Radius').onChange((v) => this.bloomPass.radius = v);
 
     // Effects
     const fxFolder = gui.addFolder('Effects');
