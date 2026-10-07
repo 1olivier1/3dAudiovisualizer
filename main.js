@@ -20,6 +20,13 @@ const visualModes = {
   plane: ['Pulse Plane', 'A rolling wireframe landscape that rises with the beat.'],
 };
 const activeLayers = new Set(['sphere']);
+const colorState = { palette: 'aurora', a: '#7bf2d1', b: '#428dff', rainbow: false, speed: 0.25, overrides: {} };
+const director = { baseline: 0, previousBass: 0, beats: [], lastBeat: -10, lastSwitch: 0, candidate: '', candidateSince: 0, section: '' };
+let capture = null, recordingStarting = false, recordedURL, customLogo = null, logoURL;
+let previousCleanFocus = false, lastColorTime = -1;
+const recordingSupported = typeof MediaRecorder !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
+const presetKey = 'proxisol.visualizer.presets.v1';
+let savedPresets = [];
 let objectURL, loadedFile = false, demoActive = false, demoTimer, demoBus;
 let operationGeneration = 0, playingRequest = false;
 let demoStep = 0, nextDemoTime = 0, elapsed = 0;
@@ -47,6 +54,8 @@ function syncPlaybackUI() {
   $('demoButton').textContent = demoActive ? 'Stop demo' : 'Try demo';
   $('demoButton').setAttribute('aria-pressed', String(demoActive));
   $('seek').disabled = demoActive || !Number.isFinite(audio.duration) || audio.duration <= 0;
+  $('recordButton').disabled = !app || !recordingSupported || recordingStarting || (!playing && !capture);
+  syncBranding();
 }
 
 // The browser allows AudioContext to start only after a user gesture.
@@ -72,6 +81,7 @@ async function ensureAudio() {
 }
 
 function stopDemo() {
+  if (demoActive && capture) stopRecording();
   clearInterval(demoTimer);
   demoTimer = undefined;
   demoActive = false;
@@ -196,6 +206,7 @@ for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'durationchange
   audio.addEventListener(event, () => {
     if (!demoActive) $('duration').textContent = timeLabel(audio.duration);
     if (event === 'ended' && !demoActive) message('Track finished. Press play to listen again.');
+    if ((event === 'pause' || event === 'ended') && !demoActive && capture) stopRecording();
     syncPlaybackUI();
   });
 }
@@ -230,19 +241,45 @@ function applySettings() {
 settings.forEach((id) => $(id).addEventListener('input', applySettings));
 function setPalette(name) {
   const palette = palettes[name];
-  document.documentElement.style.setProperty('--accent', palette.a);
-  document.documentElement.style.setProperty('--accent-rgb', palette.rgb);
+  if (!palette) return;
+  colorState.palette = name; colorState.a = palette.a; colorState.b = palette.b;
+  colorState.rainbow = false; colorState.overrides = {};
+  syncColorUI(); applyColors();
+}
+function syncColorUI() {
+  $('primaryColor').value = colorState.a; $('secondaryColor').value = colorState.b;
+  $('rainbow').checked = colorState.rainbow; $('rainbowSpeed').value = colorState.speed;
+  $('rainbowSpeedValue').value = Number(colorState.speed).toFixed(2);
+  document.documentElement.style.setProperty('--accent', colorState.a);
+  const rgb = [1, 3, 5].map(i => parseInt(colorState.a.slice(i, i + 2), 16)).join(',');
+  document.documentElement.style.setProperty('--accent-rgb', rgb);
   document.querySelectorAll('.palette').forEach((button) => {
-    const active = button.dataset.palette === name;
+    const active = button.dataset.palette === colorState.palette;
     button.classList.toggle('active', active);
     button.setAttribute('aria-pressed', String(active));
   });
+  document.querySelectorAll('[data-color-layer]').forEach(input => {
+    const name = input.dataset.colorLayer;
+    input.checked = !!colorState.overrides[name];
+    document.querySelector(`[data-layer-color="${name}"]`).value = colorState.overrides[name] || colorState.a;
+  });
+}
+function hueHex(h) {
+  const c = 0.75, x = c * (1 - Math.abs((h * 6) % 2 - 1)), m = 0.2;
+  const rgb = [[c,x,0],[x,c,0],[0,c,x],[0,x,c],[x,0,c],[c,0,x]][Math.floor(h * 6) % 6];
+  return '#' + rgb.map(v => Math.round((v + m) * 255).toString(16).padStart(2,'0')).join('');
+}
+function applyColors(time = elapsed) {
+  const palette = colorState.rainbow
+    ? { a: hueHex((time * colorState.speed * 0.07) % 1), b: hueHex((time * colorState.speed * 0.07 + 0.32) % 1) }
+    : { a: colorState.a, b: colorState.b };
   if (app) {
-    app.uniforms.uColorA.value.set(palette.a);
-    app.uniforms.uColorB.value.set(palette.b);
+    const sphereColor = colorState.overrides.sphere;
+    app.uniforms.uColorA.value.set(sphereColor || palette.a);
+    app.uniforms.uColorB.value.set(sphereColor || palette.b);
     app.dust.material.color.set(palette.a);
-    app.rings.forEach((ring) => ring.material.color.set(palette.a));
-    app.visuals.setPalette(palette);
+    app.rings.forEach((ring) => ring.material.color.set(sphereColor || palette.a));
+    app.visuals.setPalette(palette, colorState.overrides);
   }
 }
 document.querySelectorAll('.palette').forEach((button) => button.addEventListener('click', () => setPalette(button.dataset.palette)));
@@ -250,6 +287,7 @@ $('resetButton').addEventListener('click', () => {
   for (const id of settings) $(id).value = defaults[id];
   applySettings(); setPalette('aurora');
   $('barLayout').value = 'radial';
+  disableDirector();
   chooseMode('sphere');
   if (app) { app.controls.reset(); app.sphere.rotation.set(0, 0, 0.18); }
 });
@@ -313,19 +351,277 @@ function chooseMode(name) {
   activeLayers.clear(); activeLayers.add(name);
   syncLayers();
 }
-$('visualMode').addEventListener('change', event => chooseMode(event.target.value));
+$('visualMode').addEventListener('change', event => { disableDirector(); chooseMode(event.target.value); });
 document.querySelectorAll('[data-layer]').forEach(input => input.addEventListener('change', () => {
+  disableDirector();
   if (input.checked) activeLayers.add(input.dataset.layer);
   else if (activeLayers.size > 1) activeLayers.delete(input.dataset.layer);
   else { input.checked = true; return; }
   syncLayers();
 }));
 
+function disableDirector() {
+  $('autoTransitions').checked = false;
+  $('directorStatus').textContent = 'Manual mode';
+  director.section = ''; director.candidate = '';
+}
+function updateDirector(delta, time) {
+  if (!$('autoTransitions').checked || !(demoActive || !audio.paused)) return;
+  const bass = levels.bass, energy = bass * 0.55 + levels.mid * 0.3 + levels.high * 0.15;
+  director.baseline += (bass - director.baseline) * (1 - Math.exp(-delta * 0.65));
+  if (bass > Math.max(0.16, director.baseline * 1.3) && bass > director.previousBass + 0.01 && time - director.lastBeat > 0.28) {
+    director.beats.push(time); director.lastBeat = time;
+  }
+  director.previousBass = bass;
+  director.beats = director.beats.filter(t => time - t < 3);
+  const section = energy > 0.36 || (energy > 0.18 && director.beats.length >= 3) ? 'drop' : energy > 0.16 ? 'build' : 'calm';
+  if (section !== director.candidate) { director.candidate = section; director.candidateSince = time; }
+  if (section === director.section || time - director.candidateSince < 1.2 || time - director.lastSwitch < Number($('transitionInterval').value)) return;
+  const layers = { calm: ['particles','waveform'], build: ['ring','waveform'], drop: ['sphere','bars','tunnel'] }[section];
+  activeLayers.clear(); layers.forEach(name => activeLayers.add(name));
+  syncLayers(); director.section = section; director.lastSwitch = time;
+  $('directorStatus').textContent = `Following music · ${section === 'drop' ? 'High energy' : section === 'build' ? 'Building' : 'Calm'}`;
+}
+$('autoTransitions').addEventListener('change', () => {
+  director.lastSwitch = elapsed - Number($('transitionInterval').value); director.candidate = ''; director.section = '';
+  $('directorStatus').textContent = $('autoTransitions').checked ? 'Listening for energy changes…' : 'Manual mode';
+});
+$('transitionInterval').addEventListener('input', () => { $('transitionIntervalValue').value = `${$('transitionInterval').value}s`; });
+
+function syncBranding() {
+  if (!$('brandPreview')) return;
+  const brand = $('brandPreview'); brand.hidden = !$('showBrand').checked;
+  if (customLogo) {
+    if (!brand.querySelector('img')) { const image = document.createElement('img'); image.src = logoURL; image.alt = ''; brand.replaceChildren(image); }
+  } else brand.textContent = '◎ PROXISOL';
+  $('titlePreview').hidden = !$('showTrackTitle').checked;
+  $('titlePreview').textContent = getOverlayTitle();
+}
+function getOverlayTitle() {
+  return $('overlayTitle').value.trim() || (demoActive ? 'Orbit / built-in synth' : loadedFile ? audio.dataset.filename.replace(/\.[^.]+$/, '') : '');
+}
+function toggleClean(force) {
+  const active = typeof force === 'boolean' ? force : !document.body.classList.contains('clean-view');
+  if (active && !document.body.classList.contains('clean-view')) previousCleanFocus = document.body.classList.contains('immersive');
+  document.body.classList.toggle('clean-view', active);
+  $('cleanButton').setAttribute('aria-pressed', String(active));
+  if (active) toggleFocus(true); else toggleFocus(previousCleanFocus);
+}
+$('cleanButton').addEventListener('click', () => toggleClean());
+$('exitCleanButton').addEventListener('click', () => toggleClean(false));
+window.addEventListener('keydown', event => { if (event.key === 'Escape' && document.body.classList.contains('clean-view')) toggleClean(false); });
+for (const id of ['showBrand','showTrackTitle','overlayTitle']) $(id).addEventListener('input', syncBranding);
+$('logoUpload').addEventListener('change', async event => {
+  const file = event.target.files[0]; event.target.value = '';
+  if (!file) return;
+  if (!['image/png','image/jpeg','image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+    $('recordStatus').textContent = 'Choose a PNG, JPEG or WebP logo under 5 MB.'; return;
+  }
+  const url = URL.createObjectURL(file), image = new Image();
+  image.src = url;
+  try {
+    await image.decode();
+    if (logoURL) URL.revokeObjectURL(logoURL);
+    logoURL = url; customLogo = image;
+    $('brandPreview').replaceChildren(); $('showBrand').checked = true; syncBranding();
+    $('recordStatus').textContent = 'Logo loaded for this session. It will appear in your export.';
+  } catch { URL.revokeObjectURL(url); $('recordStatus').textContent = 'That image could not be opened. Try a PNG logo.'; }
+});
+$('clearLogoButton').addEventListener('click', () => {
+  customLogo = null; if(logoURL) URL.revokeObjectURL(logoURL); logoURL = undefined; syncBranding();
+});
+
+function setupColorControls() {
+  for (const [name, [label]] of Object.entries(visualModes)) {
+    const row = document.createElement('div'); row.className = 'layer-color-row';
+    const text = document.createElement('label'), enabled = document.createElement('input'), color = document.createElement('input');
+    enabled.type = 'checkbox'; enabled.dataset.colorLayer = name;
+    text.append(enabled, document.createTextNode(label));
+    color.type = 'color'; color.value = colorState.a; color.dataset.layerColor = name; color.setAttribute('aria-label', `${label} color`);
+    row.append(text, color); $('layerColors').appendChild(row);
+    enabled.addEventListener('change', () => { if(enabled.checked) colorState.overrides[name] = color.value; else delete colorState.overrides[name]; applyColors(); });
+    color.addEventListener('input', () => { enabled.checked = true; colorState.overrides[name] = color.value; applyColors(); });
+  }
+  for (const [id,key] of [['primaryColor','a'],['secondaryColor','b']]) $(id).addEventListener('input', () => {
+    colorState[key] = $(id).value; colorState.palette = ''; syncColorUI(); applyColors();
+  });
+  $('rainbow').addEventListener('change', () => { colorState.rainbow = $('rainbow').checked; applyColors(); });
+  $('rainbowSpeed').addEventListener('input', () => { colorState.speed = Number($('rainbowSpeed').value); $('rainbowSpeedValue').value = colorState.speed.toFixed(2); });
+  syncColorUI();
+}
+
+function snapshotPreset() {
+  return { version: 1, layers: [...activeLayers], settings: Object.fromEntries(settings.map(id => [id,Number($(id).value)])),
+    barLayout: $('barLayout').value, colors: JSON.parse(JSON.stringify(colorState)), auto: $('autoTransitions').checked,
+    interval: Number($('transitionInterval').value), studio: { format: $('recordFormat').value, brand: $('showBrand').checked, title: $('showTrackTitle').checked, text: $('overlayTitle').value } };
+}
+function validPreset(preset) {
+  const hex = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+  return preset && typeof preset.id === 'string' && typeof preset.name === 'string' && preset.name.length <= 48 &&
+    preset.data?.version === 1 && Array.isArray(preset.data.layers) && preset.data.layers.length > 0 && preset.data.layers.length <= 7 && preset.data.layers.every(name => Object.hasOwn(visualModes,name)) &&
+    preset.data.settings && settings.every(id => Number.isFinite(preset.data.settings[id])) &&
+    preset.data.colors && hex(preset.data.colors.a) && hex(preset.data.colors.b) &&
+    (!preset.data.colors.overrides || Object.entries(preset.data.colors.overrides).every(([name,color]) => Object.hasOwn(visualModes,name) && hex(color)));
+}
+function refreshPresets(selected = '') {
+  $('presetSelect').replaceChildren(new Option('Choose a saved preset',''));
+  savedPresets.forEach(preset => $('presetSelect').appendChild(new Option(preset.name,preset.id)));
+  $('presetSelect').value = selected; $('deletePresetButton').disabled = !selected;
+}
+function persistPresets() {
+  try { localStorage.setItem(presetKey,JSON.stringify(savedPresets)); return true; }
+  catch { $('presetStatus').textContent = 'Saved for this session. Browser storage is unavailable.'; return false; }
+}
+function loadPreset(preset) {
+  if(!validPreset(preset)) return;
+  const data = preset.data;
+  for(const id of settings) $(id).value = Math.max(Number($(id).min),Math.min(Number($(id).max),data.settings[id]));
+  colorState.a = data.colors.a; colorState.b = data.colors.b; colorState.palette = Object.hasOwn(palettes,data.colors.palette) ? data.colors.palette : '';
+  colorState.rainbow = !!data.colors.rainbow; colorState.speed = Math.max(0.05,Math.min(2,Number(data.colors.speed)||0.25));
+  colorState.overrides = {...data.colors.overrides};
+  $('barLayout').value = ['radial','vertical','wall'].includes(data.barLayout) ? data.barLayout : 'radial';
+  activeLayers.clear(); data.layers.forEach(name => activeLayers.add(name));
+  syncLayers(); applySettings(); syncColorUI(); applyColors();
+  $('autoTransitions').checked = !!data.auto;
+  $('transitionInterval').value = Math.max(4,Math.min(30,Number(data.interval)||8));
+  $('transitionIntervalValue').value = `${$('transitionInterval').value}s`;
+  $('autoTransitions').dispatchEvent(new Event('change'));
+  if(!capture) $('recordFormat').value = data.studio?.format === 'landscape' ? 'landscape' : 'vertical';
+  $('showBrand').checked = !!data.studio?.brand; $('showTrackTitle').checked = !!data.studio?.title;
+  $('overlayTitle').value = typeof data.studio?.text === 'string' ? data.studio.text.slice(0,100) : '';
+  $('presetName').value = preset.name; syncBranding();
+  $('presetStatus').textContent = `Loaded “${preset.name}”.`;
+}
+$('savePresetButton').addEventListener('click', () => {
+  const name = $('presetName').value.trim();
+  if(!name) { $('presetStatus').textContent = 'Give your preset a name first.'; $('presetName').focus(); return; }
+  let preset = savedPresets.find(p => p.name === name);
+  if(!preset && savedPresets.length >= 20) { $('presetStatus').textContent = 'You have 20 presets. Delete one to make room.'; return; }
+  if(preset) preset.data = snapshotPreset();
+  else { preset = {id: crypto.randomUUID(),name,data:snapshotPreset()}; savedPresets.push(preset); }
+  const persisted = persistPresets(); refreshPresets(preset.id);
+  if(persisted) $('presetStatus').textContent = `Saved “${name}” on this device.`;
+});
+$('presetSelect').addEventListener('change', () => {
+  const preset = savedPresets.find(p => p.id === $('presetSelect').value);
+  $('deletePresetButton').disabled = !preset;
+  if(preset) loadPreset(preset);
+});
+$('deletePresetButton').addEventListener('click', () => {
+  savedPresets = savedPresets.filter(p => p.id !== $('presetSelect').value);
+  persistPresets(); refreshPresets(); $('presetName').value = ''; $('presetStatus').textContent = 'Preset deleted.';
+});
+
+function recordingMime() {
+  return ['video/mp4;codecs=avc1.420028,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm'].find(type => MediaRecorder.isTypeSupported(type)) || '';
+}
+function paintCapture(now, force = false) {
+  const r = capture;
+  if(!r || (!force && now - r.lastPaint < 1000/30)) return;
+  r.lastPaint = now;
+  const ctx = r.context, w = r.canvas.width, h = r.canvas.height, pad = Math.round(w * 0.055);
+  ctx.fillStyle = '#080b10'; ctx.fillRect(0,0,w,h);
+  ctx.drawImage(app.renderer.domElement,0,0,w,h);
+  const title = $('showTrackTitle').checked ? getOverlayTitle() : '';
+  const titleY = h - pad;
+  if($('showBrand').checked) {
+    const y = title ? titleY - w*0.065 : titleY;
+    if(customLogo) {
+      const size = Math.min(w*0.24/customLogo.naturalWidth,w*0.13/customLogo.naturalHeight);
+      ctx.drawImage(customLogo,pad,y-customLogo.naturalHeight*size,customLogo.naturalWidth*size,customLogo.naturalHeight*size);
+    } else {
+      ctx.font = `700 ${Math.round(w*0.027)}px system-ui,sans-serif`; ctx.fillStyle = colorState.a;
+      ctx.shadowColor='#000';ctx.shadowBlur=8;ctx.fillText('◎ PROXISOL',pad,y);ctx.shadowBlur=0;
+    }
+  }
+  if(title) {
+    ctx.font = `500 ${Math.round(w*0.028)}px system-ui,sans-serif`;ctx.fillStyle='#edf3f4';ctx.shadowColor='#000';ctx.shadowBlur=10;
+    let text=title; while(text.length>1 && ctx.measureText(text).width>w-pad*2) text=text.slice(0,-1);
+    if(text!==title) text=text.slice(0,-1)+'…';
+    ctx.fillText(text,pad,titleY);ctx.shadowBlur=0;
+  }
+  // Explicit frames keep capture reliable when the preview is scrolled offscreen.
+  r.videoTrack?.requestFrame?.();
+  const duration = Math.floor((now-r.started)/1000);
+  if(duration !== r.lastSecond) { r.lastSecond=duration; $('recordBadge').textContent = `REC ${timeLabel(duration)}`; }
+  if(duration >= 600) stopRecording();
+}
+function releaseCapture(r) {
+  r.stream?.getTracks().forEach(track => track.stop());
+  if(r.destination) { try { outputGain.disconnect(r.destination); } catch {} }
+  r.canvas?.remove(); capture = null;
+  document.body.classList.remove('recording');
+  $('recordFormat').disabled = false; $('cleanStopButton').hidden = true;
+  $('recordButton').textContent = '● Start recording'; $('recordBadge').textContent = 'READY';
+  if(app) { app.renderer.setPixelRatio(r.pixelRatio); app.composer.setPixelRatio(r.pixelRatio); app.resize(); }
+  syncPlaybackUI();
+}
+async function startRecording() {
+  if(capture || recordingStarting || !app || !recordingSupported) return;
+  if(!demoActive && audio.paused) { $('recordStatus').textContent = 'Play your track or the demo before recording.'; return; }
+  recordingStarting = true; syncPlaybackUI();
+  let r;
+  try {
+    await ensureAudio();
+    if(!demoActive && audio.paused) throw new Error('Play audio before recording.');
+    const vertical = $('recordFormat').value === 'vertical';
+    const canvas = document.createElement('canvas'); canvas.width = vertical ? 1080 : 1920; canvas.height = vertical ? 1920 : 1080; canvas.className = 'capture-preview';
+    const context = canvas.getContext('2d');
+    if(!context) throw new Error('Video canvas is unavailable.');
+    r = { canvas,context,pixelRatio:app.renderer.getPixelRatio(),chunks:[],started:performance.now(),lastPaint:-1,lastSecond:-1,format:vertical?'vertical':'landscape' };
+    capture = r;
+    r.destination = audioContext.createMediaStreamDestination(); outputGain.connect(r.destination);
+    const manualFrames = 'requestFrame' in (window.CanvasCaptureMediaStreamTrack?.prototype || {});
+    const video = canvas.captureStream(manualFrames ? 0 : 30);
+    r.videoTrack = video.getVideoTracks()[0];
+    r.stream = new MediaStream([...video.getVideoTracks(),...r.destination.stream.getAudioTracks()]);
+    const mimeType = recordingMime();
+    r.recorder = new MediaRecorder(r.stream,{...(mimeType ? {mimeType} : {}),videoBitsPerSecond:12000000,audioBitsPerSecond:192000});
+    r.recorder.ondataavailable = event => { if(event.data.size) r.chunks.push(event.data); };
+    r.recorder.onerror = event => { r.failed=true; $('recordStatus').textContent = event.error?.message || 'Recording failed. Try another browser or close other apps.'; stopRecording(); };
+    r.recorder.onstop = () => {
+      const type = r.recorder.mimeType || mimeType || 'video/webm';
+      const blob = new Blob(r.chunks,{type});
+      const seconds = (performance.now()-r.started)/1000;
+      releaseCapture(r);
+      if(r.failed || !blob.size) { $('recordStatus').textContent = 'Recording could not be saved. Please try again.'; return; }
+      if(recordedURL) URL.revokeObjectURL(recordedURL);
+      recordedURL = URL.createObjectURL(blob);
+      const extension = type.includes('mp4') ? 'mp4' : 'webm';
+      $('recordDownload').href = recordedURL;
+      $('recordDownload').download = `ProxiSol-${r.format}-${new Date().toISOString().replace(/[:.]/g,'-')}.${extension}`;
+      $('recordDownload').textContent = `Download ${extension.toUpperCase()} · ${(blob.size/1024/1024).toFixed(1)} MB`;
+      $('recordDownload').hidden = false;
+      $('recordStatus').textContent = `Ready to download · ${canvas.width} × ${canvas.height} · ${timeLabel(seconds)} · audio included.`;
+    };
+    app.setCaptureSize(canvas.width,canvas.height);
+    $('viewport').appendChild(canvas); app.composer.render(); paintCapture(performance.now(),true);
+    r.recorder.start(1000);
+    paintCapture(performance.now(),true);
+    document.body.classList.add('recording'); $('recordFormat').disabled = true; $('cleanStopButton').hidden = false;
+    $('recordButton').textContent = '■ Stop recording';
+    $('recordStatus').textContent = 'Recording picture and audio. Keep this tab visible; stop when your clip is ready.';
+  } catch(error) {
+    if(r) releaseCapture(r);
+    $('recordStatus').textContent = `Unable to record: ${error.message}`;
+  } finally { recordingStarting=false;syncPlaybackUI(); }
+}
+function stopRecording() { if(capture?.recorder?.state && capture.recorder.state !== 'inactive') capture.recorder.stop(); }
+$('recordButton').addEventListener('click', () => { if(capture) stopRecording(); else startRecording(); });
+$('cleanStopButton').addEventListener('click', stopRecording);
+
+function setupStudio() {
+  setupColorControls();
+  try { const data=JSON.parse(localStorage.getItem(presetKey)||'[]'); if(Array.isArray(data)) savedPresets=data.filter(validPreset).slice(0,20); }
+  catch { savedPresets=[]; }
+  refreshPresets(); syncBranding();
+  if(!recordingSupported) $('recordStatus').textContent = 'Video recording is unavailable in this browser. The visualizer and clean view still work.';
+}
+
 // Allocate each visualizer once. Switching modes only changes visibility, so
 // playback and the audio graph stay continuous and GPU resources do not leak.
 function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
   const nodes = { sphere };
-  const tintMaterials = [];
   const colorA = new THREE.Color(palettes.aurora.a), colorB = new THREE.Color(palettes.aurora.b);
   const barCount = 64;
   const barMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
@@ -345,7 +641,7 @@ function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
   const particleGeometry = new THREE.BufferGeometry();
   particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
   const particleMaterial = new THREE.ShaderMaterial({
-    uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: THREE.UniformsUtils.clone(uniforms), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: `uniform float uTime,uBass,uMid,uHigh; varying float vTint;
       void main(){
         float ripple = sin(position.y*7.0 + uTime*1.4) * cos(position.x*5.0-uTime);
@@ -368,7 +664,6 @@ function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(waveSamples * 3), 3).setUsage(THREE.DynamicDrawUsage));
     const material = new THREE.LineBasicMaterial({ color: palettes.aurora.a, transparent: true, opacity: 0.9 - index * 0.075 });
-    tintMaterials.push(material);
     const line = new THREE.Line(geometry, material);
     line.frustumCulled = false; line.position.z = -index * 0.22; line.position.y = -index * 0.08 + 0.3;
     waveGroup.add(line); return line;
@@ -376,7 +671,8 @@ function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
   nodes.waveform = waveGroup;
   let waveTick = 0;
 
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.16, 14, 100), sphereMaterial);
+  const ringMaterial = sphereMaterial.clone();
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.16, 14, 100), ringMaterial);
   ring.rotation.x = 0.55;
   nodes.ring = ring;
   const tunnel = new THREE.Group();
@@ -386,7 +682,6 @@ function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
       new THREE.Vector3(2.1,1.55,0),new THREE.Vector3(-2.1,1.55,0),
     ]);
     const material = new THREE.LineBasicMaterial({ color: palettes.aurora.a, transparent: true, opacity: 0.6 });
-    tintMaterials.push(material);
     const frame = new THREE.LineLoop(geometry, material);
     frame.position.z = -i; tunnel.add(frame); return frame;
   });
@@ -395,20 +690,26 @@ function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
   const planeGeometry = new THREE.PlaneGeometry(4.2, 4.2, 38, 38);
   const planeBase = planeGeometry.attributes.position.array.slice();
   const planeMaterial = new THREE.MeshBasicMaterial({ color: palettes.aurora.a, wireframe: true, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
-  tintMaterials.push(planeMaterial);
   const plane = new THREE.Mesh(planeGeometry, planeMaterial);
   plane.rotation.x = -1.03; plane.position.y = -0.4; plane.frustumCulled = false;
   nodes.plane = plane;
   Object.entries(nodes).forEach(([name, node]) => { if(name !== 'sphere') scene.add(node); });
 
-  function setPalette(palette) {
+  function setPalette(palette, overrides = {}) {
     colorA.set(palette.a); colorB.set(palette.b);
-    tintMaterials.forEach(material => material.color.set(palette.a));
-    for (let i = 0; i < barCount; i++) barMesh.setColorAt(i, colorB.clone().lerp(colorA, i / (barCount - 1)).multiplyScalar(0.72));
+    waveLines.forEach(line => line.material.color.set(overrides.waveform || palette.a));
+    tunnelFrames.forEach(frame => frame.material.color.set(overrides.tunnel || palette.a));
+    planeMaterial.color.set(overrides.plane || palette.a);
+    for (const [name, shader] of [['ring',ringMaterial],['particles',particleMaterial]]) {
+      shader.uniforms.uColorA.value.set(overrides[name] || palette.a);
+      shader.uniforms.uColorB.value.set(overrides[name] || palette.b);
+    }
+    for (let i = 0; i < barCount; i++) barMesh.setColorAt(i, (overrides.bars ? new THREE.Color(overrides.bars) : colorB.clone().lerp(colorA, i / (barCount - 1))).multiplyScalar(0.72));
     barMesh.instanceColor.needsUpdate = true;
   }
   setPalette(palettes.aurora);
   function update(delta, time, response, motion) {
+    for(const shader of [particleMaterial,ringMaterial]) for(const name of ['uTime','uBass','uMid','uHigh']) shader.uniforms[name].value = uniforms[name].value;
     const bass = levels.bass * response * motion;
     const mid = levels.mid * response * motion;
     const spin = Number($('rotation').value) * motion;
@@ -554,12 +855,18 @@ async function init() {
     const visuals = createVisualModes(THREE, scene, uniforms, sphere, material);
     function fitMode() {
       const onlySphere = activeLayers.size === 1 && activeLayers.has('sphere');
-      const distance = onlySphere ? 5.7 : Math.max(5.7, 3.2 / (Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(1,camera.aspect)));
+      const distance = onlySphere && !capture ? 5.7 : Math.max(5.7, (onlySphere ? 1.9 : 3.2) / (Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(1,camera.aspect)));
       camera.position.set(0,0.25,Math.min(distance,18));
       controls.target.set(0,0,0); controls.update();
     }
-    app = { renderer, bloom, uniforms, sphere, dust, rings, controls, composer, visuals, fitMode };
+    function setCaptureSize(width,height) {
+      renderer.setPixelRatio(1); composer.setPixelRatio(1);
+      camera.aspect = width/height; camera.updateProjectionMatrix(); fitMode();
+      renderer.setSize(width,height,false); composer.setSize(width,height);
+    }
+    app = { renderer, bloom, uniforms, sphere, dust, rings, controls, composer, visuals, fitMode, resize, setCaptureSize };
     function resize() {
+      if(capture) return;
       const width = Math.max(1, viewport.clientWidth), height = Math.max(1, viewport.clientHeight);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
@@ -568,12 +875,13 @@ async function init() {
       fitMode();
     }
     new ResizeObserver(resize).observe(viewport);
-    resize(); applySettings(); syncLayers();
+    resize(); applySettings(); syncLayers(); applyColors();
     $('renderStatus').textContent = '3D engine ready';
     $('demoButton').disabled = false;
     syncPlaybackUI();
     renderer.domElement.addEventListener('webglcontextlost', (event) => {
       event.preventDefault(); renderer.setAnimationLoop(null);
+      stopRecording();
       audio.pause(); stopDemo();
       $('renderStatus').textContent = 'Graphics connection lost';
       message('The graphics context was lost. Reload this page to restart.', true);
@@ -586,6 +894,8 @@ async function init() {
       if (document.hidden) return;
       elapsed += delta;
       updateAudio(delta);
+      updateDirector(delta,elapsed);
+      if(colorState.rainbow && elapsed-lastColorTime>=0.08) { applyColors(elapsed);lastColorTime=elapsed; }
       const response = Number($('sensitivity').value);
       const motion = reducedMotion.matches ? 0.2 : 1;
       uniforms.uTime.value = elapsed * motion;
@@ -598,6 +908,7 @@ async function init() {
       visuals.update(delta, elapsed * motion, response, motion);
       controls.update();
       composer.render(delta);
+      if(capture) paintCapture(now);
     });
   } catch (error) {
     console.error('Visualizer initialization failed:', error);
@@ -606,11 +917,14 @@ async function init() {
   }
 }
 window.addEventListener('pagehide', () => {
+  stopRecording();
   audio.pause(); stopDemo();
 });
 // Refill the synth scheduler after returning to a backgrounded tab.
 document.addEventListener('visibilitychange', () => {
+  if(document.hidden && capture) stopRecording();
   if (!document.hidden && demoActive && nextDemoTime < audioContext.currentTime) nextDemoTime = audioContext.currentTime + 0.04;
 });
+setupStudio();
 applySettings();
 init();
