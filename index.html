@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080b10">
-  <meta name="description" content="A music-reactive Three.js wireframe sphere. Play your own audio and shape the glow, color and motion.">
+  <meta name="description" content="Seven music-reactive Three.js visualizers. Play your own audio, mix visual layers and shape the glow, color and motion.">
   <title>ProxiSol — Audio Visualizer</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='25' fill='%23080b10' stroke='%237bf2d1' stroke-width='3'/%3E%3Cellipse cx='32' cy='32' rx='12' ry='25' fill='none' stroke='%237bf2d1' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./style.css">
@@ -21,7 +21,7 @@
   <main class="workspace">
     <section class="visual-panel" aria-label="3D audio visualizer">
       <div class="stage-heading"><div><p class="eyebrow">EXPERIMENT 001</p><h1>Feel the frequency<span>.</span></h1></div><span class="mode-tag" id="modeTag">IDLE</span></div>
-      <div id="viewport" class="viewport" role="img" aria-label="Interactive wireframe sphere that reacts to your music. Drag to orbit and scroll to zoom."></div>
+      <div id="viewport" class="viewport" role="img" aria-label="Interactive sphere visualizer that reacts to your music. Drag to orbit and scroll to zoom."></div>
       <div class="stage-footer"><span><i class="status-dot"></i><span id="renderStatus">Initializing 3D…</span></span><span>DRAG TO ORBIT · SCROLL TO ZOOM</span></div>
       <button id="focusButton" class="focus-button" type="button" aria-label="Toggle immersive view" aria-pressed="false">⤢ <span>Immersive view</span></button>
       <div class="drop-overlay" aria-hidden="true">Drop your audio here</div>
@@ -29,7 +29,7 @@
     <aside class="controls" aria-label="Audio and visual controls">
       <section class="panel audio-panel">
         <div class="section-title"><h2>Your soundtrack</h2><span class="small-tag">LOCAL AUDIO</span></div>
-        <label class="upload-zone" for="audioUpload"><span class="upload-icon" aria-hidden="true">↑</span><strong>Choose an audio file</strong><span>or drop it onto the sphere</span><small>MP3, WAV, OGG, M4A · browser support varies</small></label>
+        <label class="upload-zone" for="audioUpload"><span class="upload-icon" aria-hidden="true">↑</span><strong>Choose an audio file</strong><span>or drop it onto the visualizer</span><small>MP3, WAV, OGG, M4A · browser support varies</small></label>
         <input id="audioUpload" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.aac" class="visually-hidden">
         <div class="track-info"><span class="track-art" aria-hidden="true">♫</span><div><strong id="trackName">No track selected</strong><span id="trackDetail">Your files stay on this device</span></div></div>
         <div class="transport"><button id="playButton" class="play-button" type="button" disabled aria-label="Play">▶</button><div class="timeline"><label class="visually-hidden" for="seek">Track position</label><input id="seek" type="range" min="0" max="100" step="0.1" value="0" disabled><div class="time-labels"><span id="currentTime">0:00</span><span id="duration">0:00</span></div></div><button id="demoButton" class="demo-button" type="button" disabled>Try demo</button></div>
@@ -39,6 +39,11 @@
       </section>
       <section class="panel appearance-panel">
         <div class="section-title"><h2>Shape the experience</h2><button id="resetButton" class="text-button" type="button">Reset</button></div>
+        <label class="control-caption select-label" for="visualMode">VISUALIZER</label>
+        <select id="visualMode" class="mode-select"><option value="sphere">Sphere</option><option value="bars">Frequency Bars</option><option value="particles">Particles</option><option value="waveform">Waveform</option><option value="ring">Reactive Ring</option><option value="tunnel">Tunnel</option><option value="plane">Pulse Plane</option><option value="custom" disabled>Custom mix</option></select>
+        <p id="visualDescription" class="mode-description">A wireframe sphere shaped by bass, mids and highs.</p>
+        <details class="layers-details"><summary>Mix visual layers<span aria-hidden="true">+</span></summary><div class="layer-options"><label><input type="checkbox" data-layer="sphere" checked>Sphere</label><label><input type="checkbox" data-layer="bars">Bars</label><label><input type="checkbox" data-layer="particles">Particles</label><label><input type="checkbox" data-layer="waveform">Waveform</label><label><input type="checkbox" data-layer="ring">Ring</label><label><input type="checkbox" data-layer="tunnel">Tunnel</label><label><input type="checkbox" data-layer="plane">Pulse plane</label></div><p class="layer-hint">Combine any layers. Keep at least one selected.</p></details>
+        <div id="barLayoutControl" class="bar-layout" hidden><label class="control-caption select-label" for="barLayout">BAR LAYOUT</label><select id="barLayout" class="mode-select"><option value="radial">Radial</option><option value="vertical">Vertical</option><option value="wall">Wall</option></select></div>
         <p class="control-caption">COLOR PALETTE</p>
         <div class="palettes" role="group" aria-label="Color palette"><button type="button" class="palette active" data-palette="aurora" aria-pressed="true"><i class="swatch aurora"></i>Aurora</button><button type="button" class="palette" data-palette="ember" aria-pressed="false"><i class="swatch ember"></i>Ember</button><button type="button" class="palette" data-palette="violet" aria-pressed="false"><i class="swatch violet"></i>Violet</button></div>
         <div class="slider-control"><label for="sensitivity">Audio response<output id="sensitivityValue" for="sensitivity">1.20</output></label><input id="sensitivity" type="range" min="0" max="3" step="0.05" value="1.2"></div>

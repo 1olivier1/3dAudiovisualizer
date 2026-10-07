@@ -9,6 +9,17 @@ const palettes = {
   violet: { a: '#bba1ff', b: '#ff66c5', rgb: '187,161,255' },
 };
 let app, audioContext, analyser, outputGain, mediaSource, frequencyData;
+let timeData;
+const visualModes = {
+  sphere: ['Sphere', 'A wireframe sphere shaped by bass, mids and highs.'],
+  bars: ['Frequency Bars', 'A glowing equalizer with radial, vertical and wall layouts.'],
+  particles: ['Particles', 'A cloud of light that expands and ripples with the music.'],
+  waveform: ['Waveform', 'Your actual audio waveform, layered into flowing trails.'],
+  ring: ['Reactive Ring', 'A sculpted wireframe ring that pulses with the bass.'],
+  tunnel: ['Tunnel', 'Travel through glowing frames driven by your soundtrack.'],
+  plane: ['Pulse Plane', 'A rolling wireframe landscape that rises with the beat.'],
+};
+const activeLayers = new Set(['sphere']);
 let objectURL, loadedFile = false, demoActive = false, demoTimer, demoBus;
 let operationGeneration = 0, playingRequest = false;
 let demoStep = 0, nextDemoTime = 0, elapsed = 0;
@@ -48,6 +59,7 @@ async function ensureAudio() {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
     frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    timeData = new Float32Array(analyser.fftSize);
     outputGain = audioContext.createGain();
     outputGain.gain.value = Number($('volume').value);
     analyser.connect(outputGain);
@@ -137,7 +149,7 @@ $('playButton').addEventListener('click', async () => {
     if (generation !== operationGeneration) return;
     if (audio.ended) audio.currentTime = 0;
     await audio.play();
-    message('Playing your track. Drag the sphere to change the view.');
+    message('Playing your track. Drag the visualizer to change the view.');
   } catch (error) {
     if (error.name !== 'AbortError') message('Unable to play this file. Try an MP3 or WAV supported by your browser.', true);
   } finally { playingRequest = false; syncPlaybackUI(); }
@@ -230,12 +242,15 @@ function setPalette(name) {
     app.uniforms.uColorB.value.set(palette.b);
     app.dust.material.color.set(palette.a);
     app.rings.forEach((ring) => ring.material.color.set(palette.a));
+    app.visuals.setPalette(palette);
   }
 }
 document.querySelectorAll('.palette').forEach((button) => button.addEventListener('click', () => setPalette(button.dataset.palette)));
 $('resetButton').addEventListener('click', () => {
   for (const id of settings) $(id).value = defaults[id];
   applySettings(); setPalette('aurora');
+  $('barLayout').value = 'radial';
+  chooseMode('sphere');
   if (app) { app.controls.reset(); app.sphere.rotation.set(0, 0, 0.18); }
 });
 function toggleFocus(force) {
@@ -259,7 +274,10 @@ function band(low, high) {
 }
 function updateAudio(delta) {
   const active = analyser && (demoActive || !audio.paused);
-  if (active) analyser.getByteFrequencyData(frequencyData);
+  if (active) {
+    analyser.getByteFrequencyData(frequencyData);
+    if (activeLayers.has('waveform')) analyser.getFloatTimeDomainData(timeData);
+  }
   const blend = 1 - Math.exp(-delta * 9);
   for (const [key, low, high] of [['bass', 30, 250], ['mid', 250, 2500], ['high', 2500, 12000]]) {
     const target = active ? band(low, high) : 0;
@@ -274,6 +292,176 @@ function updateAudio(delta) {
     }
     bar.style.transform = `scaleY(${Math.max(0.035, level)})`;
   });
+}
+
+function syncLayers(reframe = true) {
+  const single = activeLayers.size === 1 ? [...activeLayers][0] : 'custom';
+  $('visualMode').value = single;
+  $('visualDescription').textContent = single === 'custom'
+    ? `${activeLayers.size} visual layers playing together. Toggle layers to build your mix.`
+    : visualModes[single][1];
+  $('barLayoutControl').hidden = !activeLayers.has('bars');
+  document.querySelectorAll('[data-layer]').forEach(input => { input.checked = activeLayers.has(input.dataset.layer); });
+  $('viewport').setAttribute('aria-label', `Interactive ${single === 'custom' ? 'mixed' : visualModes[single][0]} audio visualizer. Drag to orbit and scroll to zoom.`);
+  if (!app) return;
+  for (const [name, node] of Object.entries(app.visuals.nodes)) node.visible = activeLayers.has(name);
+  app.rings.forEach(ring => { ring.visible = activeLayers.has('sphere'); });
+  if (reframe) app.fitMode();
+}
+function chooseMode(name) {
+  if (!visualModes[name]) return;
+  activeLayers.clear(); activeLayers.add(name);
+  syncLayers();
+}
+$('visualMode').addEventListener('change', event => chooseMode(event.target.value));
+document.querySelectorAll('[data-layer]').forEach(input => input.addEventListener('change', () => {
+  if (input.checked) activeLayers.add(input.dataset.layer);
+  else if (activeLayers.size > 1) activeLayers.delete(input.dataset.layer);
+  else { input.checked = true; return; }
+  syncLayers();
+}));
+
+// Allocate each visualizer once. Switching modes only changes visibility, so
+// playback and the audio graph stay continuous and GPU resources do not leak.
+function createVisualModes(THREE, scene, uniforms, sphere, sphereMaterial) {
+  const nodes = { sphere };
+  const tintMaterials = [];
+  const colorA = new THREE.Color(palettes.aurora.a), colorB = new THREE.Color(palettes.aurora.b);
+  const barCount = 64;
+  const barMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  const barMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.07, 1, 0.07), barMaterial, barCount);
+  barMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  barMesh.frustumCulled = false; // Heights change continuously.
+  const dummy = new THREE.Object3D();
+  const barLevels = new Float32Array(barCount);
+  nodes.bars = barMesh;
+
+  const count = 1400, particlePositions = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const theta = Math.random() * Math.PI * 2, z = Math.random() * 2 - 1;
+    const r = 1.25 + Math.random() * 0.7, xy = Math.sqrt(1 - z * z);
+    particlePositions.set([r * xy * Math.cos(theta), r * z, r * xy * Math.sin(theta)], i * 3);
+  }
+  const particleGeometry = new THREE.BufferGeometry();
+  particleGeometry.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
+  const particleMaterial = new THREE.ShaderMaterial({
+    uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `uniform float uTime,uBass,uMid,uHigh; varying float vTint;
+      void main(){
+        float ripple = sin(position.y*7.0 + uTime*1.4) * cos(position.x*5.0-uTime);
+        vec3 p = position*(1.0+uBass*0.24+ripple*uMid*0.12);
+        vec4 mv = modelViewMatrix*vec4(p,1.0);
+        gl_Position=projectionMatrix*mv;
+        gl_PointSize=clamp((3.0+uHigh*3.0)*5.0/max(0.1,-mv.z),1.0,15.0);
+        vTint=clamp(position.y*0.3+0.5,0.0,1.0);
+      }`,
+    fragmentShader: `uniform vec3 uColorA,uColorB; varying float vTint;
+      void main(){float d=length(gl_PointCoord-0.5);if(d>0.5)discard;
+        gl_FragColor=vec4(mix(uColorB,uColorA,vTint),smoothstep(0.5,0.08,d)*0.75);}`,
+  });
+  nodes.particles = new THREE.Points(particleGeometry, particleMaterial);
+  nodes.particles.frustumCulled = false;
+
+  const waveGroup = new THREE.Group(), waveSamples = 160;
+  const history = Array.from({ length: 9 }, () => new Float32Array(waveSamples));
+  const waveLines = history.map((_, index) => {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(waveSamples * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const material = new THREE.LineBasicMaterial({ color: palettes.aurora.a, transparent: true, opacity: 0.9 - index * 0.075 });
+    tintMaterials.push(material);
+    const line = new THREE.Line(geometry, material);
+    line.frustumCulled = false; line.position.z = -index * 0.22; line.position.y = -index * 0.08 + 0.3;
+    waveGroup.add(line); return line;
+  });
+  nodes.waveform = waveGroup;
+  let waveTick = 0;
+
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.16, 14, 100), sphereMaterial);
+  ring.rotation.x = 0.55;
+  nodes.ring = ring;
+  const tunnel = new THREE.Group();
+  const tunnelFrames = Array.from({ length: 22 }, (_, i) => {
+    const geometry = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-2.1,-1.55,0),new THREE.Vector3(2.1,-1.55,0),
+      new THREE.Vector3(2.1,1.55,0),new THREE.Vector3(-2.1,1.55,0),
+    ]);
+    const material = new THREE.LineBasicMaterial({ color: palettes.aurora.a, transparent: true, opacity: 0.6 });
+    tintMaterials.push(material);
+    const frame = new THREE.LineLoop(geometry, material);
+    frame.position.z = -i; tunnel.add(frame); return frame;
+  });
+  nodes.tunnel = tunnel;
+
+  const planeGeometry = new THREE.PlaneGeometry(4.2, 4.2, 38, 38);
+  const planeBase = planeGeometry.attributes.position.array.slice();
+  const planeMaterial = new THREE.MeshBasicMaterial({ color: palettes.aurora.a, wireframe: true, transparent: true, opacity: 0.7, side: THREE.DoubleSide });
+  tintMaterials.push(planeMaterial);
+  const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+  plane.rotation.x = -1.03; plane.position.y = -0.4; plane.frustumCulled = false;
+  nodes.plane = plane;
+  Object.entries(nodes).forEach(([name, node]) => { if(name !== 'sphere') scene.add(node); });
+
+  function setPalette(palette) {
+    colorA.set(palette.a); colorB.set(palette.b);
+    tintMaterials.forEach(material => material.color.set(palette.a));
+    for (let i = 0; i < barCount; i++) barMesh.setColorAt(i, colorB.clone().lerp(colorA, i / (barCount - 1)).multiplyScalar(0.72));
+    barMesh.instanceColor.needsUpdate = true;
+  }
+  setPalette(palettes.aurora);
+  function update(delta, time, response, motion) {
+    const bass = levels.bass * response * motion;
+    const mid = levels.mid * response * motion;
+    const spin = Number($('rotation').value) * motion;
+    const hasAudio = analyser && (demoActive || !audio.paused);
+    if (nodes.bars.visible) {
+      const layout = $('barLayout').value;
+      for (let i=0; i<barCount; i++) {
+        const low = 30*Math.pow(16000/30, i/barCount), high = 30*Math.pow(16000/30, (i+1)/barCount);
+        const target = hasAudio ? band(low, high) : 0;
+        barLevels[i] += (target-barLevels[i])*(1-Math.exp(-delta*12));
+        const height = 0.07 + Math.min(1.15,barLevels[i]*response*motion)*1.8;
+        const angle = i/barCount*Math.PI*2;
+        dummy.position.set(0,height/2-0.8,0); dummy.rotation.set(0,0,0);
+        if (layout==='vertical') dummy.position.x = (i/(barCount-1)-0.5)*4.3;
+        else if (layout==='wall') { dummy.position.x=(i%8-3.5)*0.42; dummy.position.z=(Math.floor(i/8)-3.5)*0.42; }
+        else { dummy.position.x=Math.cos(angle)*1.7; dummy.position.z=Math.sin(angle)*1.7; dummy.rotation.y=-angle; }
+        dummy.scale.set(1,height,1); dummy.updateMatrix(); barMesh.setMatrixAt(i,dummy.matrix);
+      }
+      barMesh.instanceMatrix.needsUpdate=true;
+      barMesh.rotation.y += delta*spin*0.25;
+    }
+    if (nodes.particles.visible) nodes.particles.rotation.y += delta*spin;
+    if (nodes.waveform.visible) {
+      waveTick += delta;
+      if (waveTick>=0.035) {
+        waveTick=0;
+        for(let i=history.length-1;i>0;i--) history[i].set(history[i-1]);
+        for(let i=0;i<waveSamples;i++) history[0][i]=hasAudio ? Math.tanh(timeData[Math.floor(i/(waveSamples-1)*(timeData.length-1))]*response)*motion : Math.sin(i*0.08+time)*0.035*motion;
+      }
+      waveLines.forEach((line,j) => {
+        const p=line.geometry.attributes.position;
+        for(let i=0;i<waveSamples;i++) p.setXYZ(i,(i/(waveSamples-1)-0.5)*4.3,history[j][i]*1.8,0);
+        p.needsUpdate=true;
+      });
+    }
+    if (nodes.ring.visible) { ring.rotation.x=0.55+Math.sin(time*0.5)*0.18*motion; ring.rotation.y+=delta*spin*0.4; }
+    if (nodes.tunnel.visible) tunnelFrames.forEach((frame,i) => {
+      const travel=(i+time*(0.6+bass*0.7))%22;
+      frame.position.z=-22+travel;
+      const size=1+bass*0.13+Math.sin(time+i*0.35)*mid*0.05;
+      frame.scale.set(size,size,1); frame.rotation.z=Math.sin(time*0.2+i*0.1)*0.12*motion;
+      frame.material.opacity=0.12+travel/22*0.6;
+    });
+    if(nodes.plane.visible){
+      const p=planeGeometry.attributes.position;
+      for(let i=0;i<p.count;i++){
+        const x=planeBase[i*3],y=planeBase[i*3+1];
+        p.setZ(i,Math.sin(Math.hypot(x,y)*4-time*2)*(0.07*motion+bass*0.4)+Math.cos(x*3+time)*mid*0.25);
+      }
+      p.needsUpdate=true;plane.rotation.z=Math.sin(time*0.2)*0.08*motion;
+    }
+  }
+  return { nodes, update, setPalette };
 }
 
 async function init() {
@@ -301,7 +489,7 @@ async function init() {
     controls.enableDamping = true;
     controls.enablePan = false;
     controls.minDistance = 3.5;
-    controls.maxDistance = 10;
+    controls.maxDistance = 20;
     const composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
     const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), defaults.bloomStrength, defaults.bloomRadius, defaults.bloomThreshold);
@@ -357,22 +545,30 @@ async function init() {
       const radius = 2.6 + Math.random() * 4;
       dustPositions[i * 3] = radius * Math.sin(elevation) * Math.cos(azimuth);
       dustPositions[i * 3 + 1] = radius * Math.cos(elevation);
-      dustPositions[i * 3 + 2] = radius * Math.sin(elevation) * Math.sin(azimuth);
+      dustPositions[i * 3 + 2] = -Math.abs(radius * Math.sin(elevation) * Math.sin(azimuth)) - 2;
     }
     const dustGeometry = new THREE.BufferGeometry();
     dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
     const dust = new THREE.Points(dustGeometry, new THREE.PointsMaterial({ color: palettes.aurora.a, size: 0.013, transparent: true, opacity: 0.34, depthWrite: false }));
     scene.add(dust);
-    app = { renderer, bloom, uniforms, sphere, dust, rings, controls, composer };
+    const visuals = createVisualModes(THREE, scene, uniforms, sphere, material);
+    function fitMode() {
+      const onlySphere = activeLayers.size === 1 && activeLayers.has('sphere');
+      const distance = onlySphere ? 5.7 : Math.max(5.7, 3.2 / (Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.min(1,camera.aspect)));
+      camera.position.set(0,0.25,Math.min(distance,18));
+      controls.target.set(0,0,0); controls.update();
+    }
+    app = { renderer, bloom, uniforms, sphere, dust, rings, controls, composer, visuals, fitMode };
     function resize() {
       const width = Math.max(1, viewport.clientWidth), height = Math.max(1, viewport.clientHeight);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
       composer.setSize(width, height);
+      fitMode();
     }
     new ResizeObserver(resize).observe(viewport);
-    resize(); applySettings();
+    resize(); applySettings(); syncLayers();
     $('renderStatus').textContent = '3D engine ready';
     $('demoButton').disabled = false;
     syncPlaybackUI();
@@ -399,6 +595,7 @@ async function init() {
       sphere.rotation.y += delta * Number($('rotation').value) * motion;
       dust.rotation.y += delta * 0.012 * motion;
       rings[0].rotation.z += delta * 0.015 * motion;
+      visuals.update(delta, elapsed * motion, response, motion);
       controls.update();
       composer.render(delta);
     });
