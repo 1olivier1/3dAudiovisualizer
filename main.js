@@ -1,2030 +1,419 @@
-'use strict';
-
-/**
- * Particle Background System
- * Creates floating particles with mouse interaction and connecting lines
- */
-class ParticleBackground {
-  constructor() {
-    this.canvas = document.getElementById('particleCanvas');
-    if (!this.canvas) return;
-
-    this.ctx = this.canvas.getContext('2d');
-    this.particles = [];
-    this.mouse = { x: null, y: null, radius: 150 };
-    this.particleCount = 80;
-    this.connectionDistance = 120;
-    this.baseSpeed = 0.3;
-    this.pulsePhase = 0;
-
-    this.init();
-    this.animate = this.animate.bind(this);
-    this.animate();
-  }
-
-  init() {
-    this.resize();
-    window.addEventListener('resize', () => this.resize());
-
-    window.addEventListener('mousemove', (e) => {
-      this.mouse.x = e.clientX;
-      this.mouse.y = e.clientY;
-    });
-
-    window.addEventListener('mouseout', () => {
-      this.mouse.x = null;
-      this.mouse.y = null;
-    });
-
-    // Create particles
-    for (let i = 0; i < this.particleCount; i++) {
-      this.particles.push({
-        x: Math.random() * this.canvas.width,
-        y: Math.random() * this.canvas.height,
-        vx: (Math.random() - 0.5) * this.baseSpeed,
-        vy: (Math.random() - 0.5) * this.baseSpeed,
-        size: Math.random() * 2 + 1,
-        opacity: Math.random() * 0.5 + 0.2
-      });
-    }
-  }
-
-  resize() {
-    this.canvas.width = window.innerWidth;
-    this.canvas.height = window.innerHeight;
-  }
-
-  animate() {
-    requestAnimationFrame(this.animate);
-    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    this.pulsePhase += 0.02;
-    const pulseFactor = 0.3 + Math.sin(this.pulsePhase) * 0.1;
-
-    // Update and draw particles
-    this.particles.forEach((p, i) => {
-      // Mouse repulsion
-      if (this.mouse.x !== null && this.mouse.y !== null) {
-        const dx = p.x - this.mouse.x;
-        const dy = p.y - this.mouse.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < this.mouse.radius) {
-          const force = (this.mouse.radius - dist) / this.mouse.radius;
-          p.vx += (dx / dist) * force * 0.5;
-          p.vy += (dy / dist) * force * 0.5;
-        }
-      }
-
-      // Apply velocity with damping
-      p.x += p.vx;
-      p.y += p.vy;
-      p.vx *= 0.99;
-      p.vy *= 0.99;
-
-      // Add gentle drift back to base speed
-      if (Math.abs(p.vx) < this.baseSpeed * 0.5) {
-        p.vx += (Math.random() - 0.5) * 0.05;
-      }
-      if (Math.abs(p.vy) < this.baseSpeed * 0.5) {
-        p.vy += (Math.random() - 0.5) * 0.05;
-      }
-
-      // Wrap around edges
-      if (p.x < 0) p.x = this.canvas.width;
-      if (p.x > this.canvas.width) p.x = 0;
-      if (p.y < 0) p.y = this.canvas.height;
-      if (p.y > this.canvas.height) p.y = 0;
-
-      // Draw particle with pulsing glow
-      const glowSize = p.size * (1 + pulseFactor);
-      const gradient = this.ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glowSize * 3);
-      gradient.addColorStop(0, `rgba(51, 255, 204, ${p.opacity})`);
-      gradient.addColorStop(1, 'rgba(51, 255, 204, 0)');
-
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, glowSize * 3, 0, Math.PI * 2);
-      this.ctx.fillStyle = gradient;
-      this.ctx.fill();
-
-      this.ctx.beginPath();
-      this.ctx.arc(p.x, p.y, glowSize, 0, Math.PI * 2);
-      this.ctx.fillStyle = `rgba(51, 255, 204, ${p.opacity})`;
-      this.ctx.fill();
-
-      // Draw lines to nearby particles
-      for (let j = i + 1; j < this.particles.length; j++) {
-        const p2 = this.particles[j];
-        const dx = p.x - p2.x;
-        const dy = p.y - p2.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist < this.connectionDistance) {
-          const opacity = (1 - dist / this.connectionDistance) * 0.3;
-          this.ctx.beginPath();
-          this.ctx.moveTo(p.x, p.y);
-          this.ctx.lineTo(p2.x, p2.y);
-          this.ctx.strokeStyle = `rgba(51, 255, 204, ${opacity})`;
-          this.ctx.lineWidth = 1;
-          this.ctx.stroke();
-        }
-      }
-    });
-  }
-}
-
-/**
- * 3D Audio Visualizer - Ultimate Edition
- * Features:
- * - Multiple visualization modes (sphere, bars, particles, waveform)
- * - Beat detection with reactive animations
- * - Particle explosions on bass hits
- * - Camera shake and movement
- * - Orbit controls (drag to rotate/zoom)
- * - Microphone input support
- * - Preset themes
- * - Frequency band separation (bass/mid/treble)
- */
-
-class AudioVisualizer {
-  constructor() {
-    // DOM Elements
-    this.canvas = document.getElementById('visualizerCanvas');
-    this.audioFileInput = document.getElementById('audioFileInput');
-    this.audioPlayer = document.getElementById('audioPlayer');
-
-    // Three.js core
-    this.scene = null;
-    this.camera = null;
-    this.renderer = null;
-    this.clock = new THREE.Clock();
-
-    // Audio
-    this.audioContext = null;
-    this.analyser = null;
-    this.dataArray = null;
-    this.frequencyBands = { bass: 0, mid: 0, treble: 0, average: 0 };
-    this.beatDetector = { threshold: 1.2, decay: 0.98, lastBeat: 0, energy: 0, beatCooldown: 0 };
-    this.sectionDirector = { mode: 'calm', holdUntil: 0, beatHits: 0, lastSwitch: 0 };
-    this.camChoreoState = { targetRadius: 5, targetPhi: Math.PI / 2, targetSpeed: 0.3 };
-    this.isPlaying = false;
-    this.useMicrophone = false;
-
-    // Visualizer objects
-    this.sphereMesh = null;
-    this.sphereUniforms = null;
-    this.barMeshes = [];
-    this.particles = null;
-    this.particleSystem = null;
-    this.waveformLines = [];
-    this.waveHistory = [];
-    this.ringMesh = null;
-    this.ringUniforms = null;
-    this.backgroundStars = null;
-    this.tunnelLines = [];
-    this.pulsePlane = null;
-
-    // Post-processing
-    this.composer = null;
-    this.bloomPass = null;
-
-    // Controls
-    this.orbitControls = null;
-    this.cameraShake = { intensity: 0, decay: 0.9 };
-    this.cameraTarget = new THREE.Vector3(0, 0, 0);
-
-    // Settings
-    this.params = {
-      // Visualization
-      // Visualization Flags (Mix and Match)
-      showSphere: true,
-      showBars: false,
-      showParticles: true,
-      showWaveform: true,
-      showRing: true,
-      showTunnel: true,
-      showPulsePlane: true,
-
-      // Colors
-      primaryColor: '#33ffcc',
-      secondaryColor: '#6366f1',
-      accentColor: '#ec4899',
-      theme: 'cyber', // cyber, vaporwave, minimal, fire, ocean
-
-      // Bloom
-      bloomThreshold: 0.45,
-      bloomStrength: 1.45,
-      bloomRadius: 0.5,
-
-      // Reactivity
-      reactivity: 1.35,
-      bassReactivity: 1.9,
-      beatSensitivity: 1.15,
-      cameraShakeOnBeat: true,
-      particlesOnBeat: true,
-
-      // Sphere
-      sphereSegments: 128,
-      sphereWireframe: true,
-      sphereRotationSpeed: 0.002,
-
-      // Bars
-      barCount: 64,
-      barSpacing: 0.15,
-      barWidth: 0.1,
-      barStyle: 'radial', // radial, vertical, wall
-
-      // Particles
-      particleCount: 1400,
-      particleSize: 0.05,
-      particleSpeed: 0.02,
-
-      // Performance
-      performanceMode: 'balanced', // low, balanced, high
-
-      // Background
-      showStars: true,
-      starCount: 700,
-
-      // Waveform
-      waveCount: 20,
-      waveSpacing: 0.5,
-
-      // Tunnel
-      tunnelDepth: 36,
-      tunnelWidth: 16,
-
-      // Pulse Plane
-      planeSize: 18,
-      planeOpacity: 0.26,
-
-      // Ring
-      ringRadius: 5,
-      ringTube: 0.2,
-      ringSegments: 128,
-      ringTubularSegments: 64,
-      ringColorCycle: true,
-      ringColorSpeed: 1.2,
-
-      // Camera
-      autoRotate: true,
-      autoRotateSpeed: 0.3,
-      cameraPulse: true,
-      cameraChoreo: true,
-      cameraChoreoMode: 'orbit', // orbit, pulse, drift
-
-      // Section-aware mode switching
-      sectionAware: true,
-
-      // Rainbow
-      rainbow: true,
-      rainbowSpeed: 0.9
-    };
-
-    // Themes
-    this.themes = {
-      cyber: { primary: '#33ffcc', secondary: '#6366f1', accent: '#ec4899', bg: '#0a0a0f' },
-      vaporwave: { primary: '#ff6ad5', secondary: '#c774e8', accent: '#00d4ff', bg: '#1a0a2e' },
-      minimal: { primary: '#ffffff', secondary: '#888888', accent: '#ffffff', bg: '#000000' },
-      fire: { primary: '#ff4500', secondary: '#ff8c00', accent: '#ffff00', bg: '#0d0d0d' },
-      ocean: { primary: '#00bfff', secondary: '#1e90ff', accent: '#00ffff', bg: '#001428' },
-      matrix: { primary: '#00ff00', secondary: '#003300', accent: '#00ff00', bg: '#000500' }
-    };
-
-    // GLSL Noise
-    this.noiseGLSL = `
-      vec4 permute(vec4 x){ return mod(((x*34.0)+1.0)*x,289.0); }
-      vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
-      
-      float cnoise(vec3 P){
-        vec3 Pi0 = floor(P);
-        vec3 Pi1 = Pi0 + vec3(1.0);
-        vec3 Pf0 = fract(P);
-        vec3 Pf1 = Pf0 - vec3(1.0);
-        vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
-        vec4 iy = vec4(Pi0.y, Pi0.y, Pi1.y, Pi1.y);
-        vec4 iz0 = vec4(Pi0.z);
-        vec4 iz1 = vec4(Pi1.z);
-        vec4 ixy = permute(permute(ix) + iy);
-        vec4 ixy0 = permute(ixy + iz0);
-        vec4 ixy1 = permute(ixy + iz1);
-        vec4 gx0 = ixy0 * (1.0 / 7.0);
-        vec4 gy0 = fract(floor(gx0) * (1.0 / 7.0)) - 0.5;
-        gx0 = fract(gx0);
-        vec4 gz0 = vec4(0.75) - abs(gx0) - abs(gy0);
-        vec4 sz0 = step(gz0, vec4(0.0));
-        gx0 -= sz0 * (step(0.0, gx0) - 0.5);
-        gy0 -= sz0 * (step(0.0, gy0) - 0.5);
-        vec4 gx1 = ixy1 * (1.0 / 7.0);
-        vec4 gy1 = fract(floor(gx1) * (1.0 / 7.0)) - 0.5;
-        gx1 = fract(gx1);
-        vec4 gz1 = vec4(0.75) - abs(gx1) - abs(gy1);
-        vec4 sz1 = step(gz1, vec4(0.0));
-        gx1 -= sz1 * (step(0.0, gx1) - 0.5);
-        gy1 -= sz1 * (step(0.0, gy1) - 0.5);
-        vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
-        vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
-        vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
-        vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
-        vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
-        vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
-        vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
-        vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
-        vec4 norm0 = taylorInvSqrt(vec4(dot(g000,g000), dot(g100,g100), dot(g010,g010), dot(g110,g110)));
-        g000 *= norm0.x; g100 *= norm0.y; g010 *= norm0.z; g110 *= norm0.w;
-        vec4 norm1 = taylorInvSqrt(vec4(dot(g001,g001), dot(g101,g101), dot(g011,g011), dot(g111,g111)));
-        g001 *= norm1.x; g101 *= norm1.y; g011 *= norm1.z; g111 *= norm1.w;
-        float n0 = dot(g000, Pf0);
-        float n1 = dot(g100, vec3(Pf1.x, Pf0.yz));
-        float n2 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
-        float n3 = dot(g110, vec3(Pf1.xy, Pf0.z));
-        float n4 = dot(g001, vec3(Pf0.xy, Pf1.z));
-        float n5 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
-        float n6 = dot(g011, vec3(Pf0.x, Pf1.yz));
-        float n7 = dot(g111, Pf1);
-        vec3 fade_xyz = Pf0 * Pf0 * Pf0 * (Pf0 * (Pf0 * 6.0 - 15.0) + 10.0);
-        vec4 n_z = mix(vec4(n0, n1, n2, n3), vec4(n4, n5, n6, n7), fade_xyz.z);
-        vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
-        float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x);
-        return 2.2 * n_xyz;
-      }
-    `;
-
-    // Animation
-    this.animationFrameId = null;
-
-    // Bind methods
-    this.animate = this.animate.bind(this);
-    this.handleAudioFile = this.handleAudioFile.bind(this);
-    this.onWindowResize = this.onWindowResize.bind(this);
-
-    // Initialize
-    this.init();
-  }
-
-  init() {
-    this.initScene();
-    this.initLights();
-    this.initVisualizers();
-    this.initPostProcessing();
-    this.initControls();
-    this.initGUI();
-    this.applyPerformancePreset(this.params.performanceMode);
-    this.attachEventListeners();
-    this.animate();
-    console.log('🎵 Audio Visualizer Ultimate initialized - v1.1.0');
-  }
-
-  initScene() {
-    // Scene
-    this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(this.themes[this.params.theme].bg);
-    this.scene.fog = new THREE.FogExp2(this.themes[this.params.theme].bg, 0.05);
-
-    // Camera
-    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    this.camera.position.set(0, 0, 5);
-
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({
-      canvas: this.canvas,
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance'
-    });
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1;
-  }
-
-  initLights() {
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-    this.scene.add(ambientLight);
-
-    const pointLight1 = new THREE.PointLight(this.params.primaryColor, 1, 50);
-    pointLight1.position.set(5, 5, 5);
-    this.scene.add(pointLight1);
-
-    const pointLight2 = new THREE.PointLight(this.params.secondaryColor, 0.8, 50);
-    pointLight2.position.set(-5, -5, 5);
-    this.scene.add(pointLight2);
-  }
-
-  initVisualizers() {
-    this.createSphere();
-    this.createBars();
-    this.createParticles();
-    this.createWaveform();
-    this.createRing();
-    this.createTunnel();
-    this.createPulsePlane();
-    this.createBackgroundStars();
-    this.updateVisualizerVisibility();
-  }
-
-  createSphere() {
-    this.sphereUniforms = {
-      uTime: { value: 0 },
-      uBass: { value: 0 },
-      uMid: { value: 0 },
-      uTreble: { value: 0 },
-      uBeat: { value: 0 },
-      uColor1: { value: new THREE.Color(this.params.primaryColor) },
-      uColor2: { value: new THREE.Color(this.params.secondaryColor) },
-      uReactivity: { value: this.params.reactivity }
-    };
-
-    const vertexShader = `
-      uniform float uTime;
-      uniform float uBass;
-      uniform float uMid;
-      uniform float uTreble;
-      uniform float uBeat;
-      uniform float uReactivity;
-      
-      varying vec3 vNormal;
-      varying vec3 vPosition;
-      varying float vDisplacement;
-      
-      ${this.noiseGLSL}
-      
-      void main() {
-        vNormal = normal;
-        vPosition = position;
-        
-        // Multi-frequency displacement
-        float bassDisp = uBass * 0.5 * uReactivity;
-        float midDisp = uMid * 0.3 * uReactivity;
-        float trebleDisp = uTreble * 0.2 * uReactivity;
-        
-        // Noise-based displacement
-        float noise1 = cnoise(position * 2.0 + uTime * 0.5) * bassDisp;
-        float noise2 = cnoise(position * 4.0 + uTime * 0.8) * midDisp;
-        float noise3 = cnoise(position * 8.0 + uTime * 1.2) * trebleDisp;
-        
-        // Beat pulse
-        float beatPulse = uBeat * 0.3;
-        
-        // Combined displacement
-        float displacement = 0.1 + noise1 + noise2 + noise3 + beatPulse;
-        displacement += sin(uTime * 2.0 + position.y * 3.0) * 0.02;
-        
-        vDisplacement = displacement;
-        
-        vec3 newPosition = position + normal * displacement;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-      }
-    `;
-
-    const fragmentShader = `
-      uniform vec3 uColor1;
-      uniform vec3 uColor2;
-      uniform float uBass;
-      uniform float uBeat;
-      
-      varying vec3 vNormal;
-      varying vec3 vPosition;
-      varying float vDisplacement;
-      
-      void main() {
-        // Gradient based on displacement (clamped to avoid blown highlights)
-        float mixAmt = clamp(vDisplacement * 1.2 + 0.5, 0.0, 1.0);
-        vec3 color = mix(uColor1, uColor2, mixAmt);
-        
-        // Add beat glow (tempered)
-        color += uBeat * 0.22;
-        
-        // Fresnel effect
-        vec3 viewDir = normalize(cameraPosition - vPosition);
-        float fresnel = pow(1.0 - abs(dot(viewDir, vNormal)), 2.0);
-        color += fresnel * 0.3;
-        
-        gl_FragColor = vec4(color, 1.0);
-      }
-    `;
-
-    const geometry = new THREE.IcosahedronGeometry(1.5, 64);
-    const material = new THREE.ShaderMaterial({
-      uniforms: this.sphereUniforms,
-      vertexShader,
-      fragmentShader,
-      wireframe: this.params.sphereWireframe
-    });
-
-    this.sphereMesh = new THREE.Mesh(geometry, material);
-    this.scene.add(this.sphereMesh);
-  }
-
-  createBars() {
-    const barCount = this.params.barCount;
-    const radius = 3;
-
-    for (let i = 0; i < barCount; i++) {
-      const angle = (i / barCount) * Math.PI * 2;
-      const geometry = new THREE.BoxGeometry(this.params.barWidth, 0.1, this.params.barWidth);
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(this.params.primaryColor),
-        emissive: new THREE.Color(this.params.primaryColor),
-        emissiveIntensity: 0.3,
-        metalness: 0.8,
-        roughness: 0.2
-      });
-
-      const bar = new THREE.Mesh(geometry, material);
-
-      if (this.params.barStyle === 'vertical') {
-        const totalWidth = (barCount - 1) * this.params.barSpacing;
-        bar.position.x = -totalWidth / 2 + i * this.params.barSpacing;
-        bar.position.z = 0;
-        bar.rotation.y = 0;
-      } else if (this.params.barStyle === 'wall') {
-        const cols = Math.ceil(Math.sqrt(barCount));
-        const rows = Math.ceil(barCount / cols);
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-
-        const xSpan = (cols - 1) * this.params.barSpacing;
-        bar.position.x = -xSpan / 2 + col * this.params.barSpacing;
-        bar.position.z = -(row - (rows - 1) / 2) * this.params.barSpacing;
-        bar.rotation.y = 0;
-      } else {
-        // radial
-        bar.position.x = Math.cos(angle) * radius;
-        bar.position.z = Math.sin(angle) * radius;
-        bar.rotation.y = -angle;
-      }
-
-      bar.userData.index = i;
-      bar.userData.baseY = 0;
-
-      this.barMeshes.push(bar);
-      this.scene.add(bar);
-    }
-  }
-
-  createParticles() {
-    const count = this.params.particleCount;
-    const positions = new Float32Array(count * 3);
-    const colors = new Float32Array(count * 3);
-    const sizes = new Float32Array(count);
-    const velocities = [];
-
-    const color1 = new THREE.Color(this.params.primaryColor);
-    const color2 = new THREE.Color(this.params.secondaryColor);
-
-    for (let i = 0; i < count; i++) {
-      // Spherical distribution
-      const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(2 * Math.random() - 1);
-      const r = 2 + Math.random() * 3;
-
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i * 3 + 2] = r * Math.cos(phi);
-
-      // Random color between primary and secondary
-      const mixRatio = Math.random();
-      const color = color1.clone().lerp(color2, mixRatio);
-      colors[i * 3] = color.r;
-      colors[i * 3 + 1] = color.g;
-      colors[i * 3 + 2] = color.b;
-
-      sizes[i] = Math.random() * this.params.particleSize + 0.01;
-
-      velocities.push({
-        x: (Math.random() - 0.5) * 0.02,
-        y: (Math.random() - 0.5) * 0.02,
-        z: (Math.random() - 0.5) * 0.02,
-        originalX: positions[i * 3],
-        originalY: positions[i * 3 + 1],
-        originalZ: positions[i * 3 + 2]
-      });
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-
-    const material = new THREE.PointsMaterial({
-      size: this.params.particleSize,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.8,
-      blending: THREE.AdditiveBlending,
-      sizeAttenuation: true
-    });
-
-    this.particles = { geometry, velocities, positions };
-    this.particleSystem = new THREE.Points(geometry, material);
-    this.scene.add(this.particleSystem);
-  }
-
-  createWaveform() {
-    this.waveformLines = [];
-    this.waveHistory = [];
-    const segmentCount = 256;
-
-    // Initialize history buffer
-    for (let i = 0; i < this.params.waveCount; i++) {
-      this.waveHistory.push(new Float32Array(segmentCount).fill(0));
-    }
-
-    for (let i = 0; i < this.params.waveCount; i++) {
-      const points = [];
-      for (let j = 0; j < segmentCount; j++) {
-        const x = (j / segmentCount - 0.5) * 10;
-        // Position z back based on index
-        points.push(new THREE.Vector3(x, 0, -i * this.params.waveSpacing));
-      }
-
-      const geometry = new THREE.BufferGeometry().setFromPoints(points);
-      const material = new THREE.LineBasicMaterial({
-        color: this.params.primaryColor,
-        linewidth: 2,
-        transparent: true,
-        opacity: Math.max(0.1, 1 - i / this.params.waveCount) // Fade out further back
-      });
-
-      const line = new THREE.Line(geometry, material);
-      line.position.y = -2;
-      this.waveformLines.push(line);
-      this.scene.add(line);
-    }
-  }
-
-
-  createTunnel() {
-    this.tunnelLines = [];
-
-    for (let i = 0; i < this.params.tunnelDepth; i++) {
-      const z = -i * 1.1;
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-this.params.tunnelWidth / 2, 0, z),
-        new THREE.Vector3(this.params.tunnelWidth / 2, 0, z)
-      ]);
-
-      const material = new THREE.LineBasicMaterial({
-        color: this.params.secondaryColor,
-        transparent: true,
-        opacity: Math.max(0.08, 1 - i / this.params.tunnelDepth)
-      });
-
-      const line = new THREE.Line(geometry, material);
-      line.userData.baseZ = z;
-      line.userData.index = i;
-      this.tunnelLines.push(line);
-      this.scene.add(line);
-    }
-  }
-
-  createPulsePlane() {
-    const geometry = new THREE.PlaneGeometry(this.params.planeSize, this.params.planeSize, 40, 40);
-    const material = new THREE.MeshBasicMaterial({
-      color: this.params.accentColor,
-      wireframe: true,
-      transparent: true,
-      opacity: this.params.planeOpacity
-    });
-
-    this.pulsePlane = new THREE.Mesh(geometry, material);
-    this.pulsePlane.rotation.x = -Math.PI / 2;
-    this.pulsePlane.position.y = -2.8;
-    this.pulsePlane.position.z = -3;
-    this.scene.add(this.pulsePlane);
-  }
-
-  createBackgroundStars() {
-    const count = this.params.starCount;
-    const positions = new Float32Array(count * 3);
-
-    for (let i = 0; i < count; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 100;
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 100;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    const material = new THREE.PointsMaterial({
-      size: 0.1,
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.6,
-      blending: THREE.AdditiveBlending
-    });
-
-    this.backgroundStars = new THREE.Points(geometry, material);
-    this.scene.add(this.backgroundStars);
-  }
-
-  createRing() {
-    this.ringUniforms = {
-      uTime: { value: 0 },
-      uBass: { value: 0 },
-      uMid: { value: 0 },
-      uTreble: { value: 0 },
-      uColor1: { value: new THREE.Color(this.params.primaryColor) },
-      uColor2: { value: new THREE.Color(this.params.secondaryColor) }
-    };
-
-    const vertexShader = `
-      uniform float uTime;
-      uniform float uBass;
-      uniform float uMid;
-      uniform float uTreble;
-      
-      varying vec2 vUv;
-      varying float vDisplacement;
-      
-      void main() {
-        vUv = uv;
-        
-        vec3 newPosition = position;
-        
-        // Add some noise/displacement based on angle and audio
-        float angle = atan(position.y, position.x);
-        float radius = length(position.xy);
-        
-        // Displacement wave around the ring
-        float wave = sin(angle * 10.0 + uTime * 2.0) * uBass * 0.5;
-        wave += cos(angle * 20.0 - uTime) * uMid * 0.3;
-        
-        // Apply to tube radius
-        float tubeDisplacement = normal.z * wave;
-        newPosition += normal * tubeDisplacement;
-        
-        vDisplacement = wave; // Pass to fragment shader
-        
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
-      }
-    `;
-
-    const fragmentShader = `
-      uniform vec3 uColor1;
-      uniform vec3 uColor2;
-      
-      varying float vDisplacement;
-      
-      void main() {
-        // glowing ring effect
-        float intensity = 0.5 + vDisplacement * 2.0;
-        vec3 color = mix(uColor1, uColor2, 0.5 + vDisplacement);
-        
-        gl_FragColor = vec4(color * intensity, 0.8);
-      }
-    `;
-
-    const geometry = new THREE.TorusGeometry(
-      this.params.ringRadius,
-      this.params.ringTube,
-      this.params.ringTubularSegments,
-      this.params.ringSegments
-    );
-
-    const material = new THREE.ShaderMaterial({
-      uniforms: this.ringUniforms,
-      vertexShader,
-      fragmentShader,
-      transparent: true,
-      wireframe: true,
-      side: THREE.DoubleSide
-    });
-
-    this.ringMesh = new THREE.Mesh(geometry, material);
-    this.ringMesh.rotation.x = Math.PI / 2; // Flat
-    this.scene.add(this.ringMesh);
-  }
-
-  rebuildRing() {
-    if (this.ringMesh) {
-      this.scene.remove(this.ringMesh);
-      this.ringMesh.geometry.dispose();
-      this.ringMesh.material.dispose();
-      this.ringMesh = null;
-    }
-    this.createRing();
-    this.updateVisualizerVisibility(); // Ensure it's visible if flag is true
-  }
-
-  rebuildBars() {
-    this.barMeshes.forEach(bar => {
-      this.scene.remove(bar);
-      bar.geometry.dispose();
-      bar.material.dispose();
-    });
-    this.barMeshes = [];
-    this.createBars();
-    this.updateVisualizerVisibility();
-  }
-
-  rebuildParticles() {
-    if (this.particleSystem) {
-      this.scene.remove(this.particleSystem);
-      this.particleSystem.geometry.dispose();
-      this.particleSystem.material.dispose();
-      this.particleSystem = null;
-      this.particles = null;
-    }
-    this.createParticles();
-    this.updateVisualizerVisibility();
-  }
-
-  rebuildStars() {
-    if (this.backgroundStars) {
-      this.scene.remove(this.backgroundStars);
-      this.backgroundStars.geometry.dispose();
-      this.backgroundStars.material.dispose();
-      this.backgroundStars = null;
-    }
-    this.createBackgroundStars();
-    this.updateVisualizerVisibility();
-  }
-
-  applyPerformancePreset(mode) {
-    const presets = {
-      low: { particleCount: 700, starCount: 350, pixelRatioCap: 1.0 },
-      balanced: { particleCount: 1400, starCount: 700, pixelRatioCap: 1.5 },
-      high: { particleCount: 2400, starCount: 1200, pixelRatioCap: 2.0 }
-    };
-
-    const preset = presets[mode] || presets.balanced;
-    this.params.performanceMode = mode;
-    this.params.particleCount = preset.particleCount;
-    this.params.starCount = preset.starCount;
-
-    if (this.renderer) {
-      this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, preset.pixelRatioCap));
-    }
-
-    this.rebuildParticles();
-    this.rebuildStars();
-  }
-
-  updateVisualizerVisibility() {
-    if (this.sphereMesh) {
-      this.sphereMesh.visible = this.params.showSphere;
-    }
-
-    this.barMeshes.forEach(bar => {
-      bar.visible = this.params.showBars;
-    });
-
-    if (this.particleSystem) {
-      this.particleSystem.visible = this.params.showParticles;
-    }
-
-    if (this.waveformLines && this.waveformLines.length > 0) {
-      this.waveformLines.forEach(line => {
-        line.visible = this.params.showWaveform;
-      });
-    }
-
-    if (this.ringMesh) {
-      this.ringMesh.visible = this.params.showRing;
-    }
-
-    if (this.tunnelLines && this.tunnelLines.length > 0) {
-      this.tunnelLines.forEach(line => {
-        line.visible = this.params.showTunnel;
-      });
-    }
-
-    if (this.pulsePlane) {
-      this.pulsePlane.visible = this.params.showPulsePlane;
-    }
-
-    if (this.backgroundStars) {
-      this.backgroundStars.visible = this.params.showStars;
-    }
-  }
-
-  initPostProcessing() {
-    try {
-      // Check if post-processing classes are available
-      if (typeof THREE.RenderPass === 'undefined' ||
-        typeof THREE.UnrealBloomPass === 'undefined' ||
-        typeof THREE.EffectComposer === 'undefined') {
-        console.warn('Post-processing not available, using standard renderer');
-        this.composer = null;
-        return;
-      }
-
-      const renderPass = new THREE.RenderPass(this.scene, this.camera);
-
-      this.bloomPass = new THREE.UnrealBloomPass(
-        new THREE.Vector2(window.innerWidth, window.innerHeight),
-        this.params.bloomStrength,
-        this.params.bloomRadius,
-        this.params.bloomThreshold
-      );
-
-      this.composer = new THREE.EffectComposer(this.renderer);
-      this.composer.addPass(renderPass);
-      this.composer.addPass(this.bloomPass);
-      console.log('Post-processing enabled with bloom effect');
-    } catch (err) {
-      console.warn('Post-processing failed to initialize:', err.message);
-      this.composer = null;
-    }
-  }
-
-  initControls() {
-    // Simple orbit controls (manual implementation since we can't load OrbitControls)
-    let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-    let spherical = { theta: 0, phi: Math.PI / 2, radius: 5 };
-
-    this.canvas.addEventListener('mousedown', (e) => {
-      isDragging = true;
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
-
-    this.canvas.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
-
-      spherical.theta -= deltaX * 0.01;
-      spherical.phi -= deltaY * 0.01;
-      spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
-
-      this.updateCameraPosition(spherical);
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-    });
-
-    this.canvas.addEventListener('mouseup', () => isDragging = false);
-    this.canvas.addEventListener('mouseleave', () => isDragging = false);
-
-    this.canvas.addEventListener('wheel', (e) => {
-      spherical.radius += e.deltaY * 0.01;
-      spherical.radius = Math.max(2, Math.min(15, spherical.radius));
-      this.updateCameraPosition(spherical);
-    });
-
-    this.sphericalCoords = spherical;
-  }
-
-  updateCameraPosition(spherical) {
-    this.camera.position.x = spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
-    this.camera.position.y = spherical.radius * Math.cos(spherical.phi);
-    this.camera.position.z = spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
-    this.camera.lookAt(this.cameraTarget);
-  }
-
-  initGUI() {
-    const gui = new dat.GUI({ width: 300, autoPlace: false });
-
-    // Mount dat.GUI into a dedicated host inside the fullscreen container
-    const guiHost = document.getElementById('guiHost');
-    if (guiHost && gui.domElement) {
-      guiHost.innerHTML = '';
-      guiHost.appendChild(gui.domElement);
-    }
-
-    // Menu within menu (cleaner control layout)
-    const visualsMenu = gui.addFolder('🎛️ Visuals');
-    const lookMenu = gui.addFolder('🎨 Look & Color');
-    const motionMenu = gui.addFolder('🎬 Motion & Camera');
-    const systemMenu = gui.addFolder('⚙️ System');
-
-    // Visualization Mode - Mix and Match
-    const vizFolder = visualsMenu.addFolder('Active Visualizers');
-    vizFolder.add(this.params, 'showSphere').name('Show Sphere').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showBars').name('Show Bars').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showParticles').name('Show Particles').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showWaveform').name('Show Waveform').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showRing').name('Show Ring').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showTunnel').name('Show Tunnel').onChange(() => this.updateVisualizerVisibility());
-    vizFolder.add(this.params, 'showPulsePlane').name('Show Pulse Plane').onChange(() => this.updateVisualizerVisibility());
-
-    const barsFolder = visualsMenu.addFolder('Bar Settings');
-    barsFolder.add(this.params, 'barStyle', ['radial', 'vertical', 'wall'])
-      .name('Bar Style')
-      .onChange(() => this.rebuildBars());
-    barsFolder.add(this.params, 'barCount', 16, 128, 1)
-      .name('Bar Count')
-      .onFinishChange(() => this.rebuildBars());
-    barsFolder.add(this.params, 'barSpacing', 0.08, 0.35, 0.01)
-      .name('Bar Spacing')
-      .onFinishChange(() => this.rebuildBars());
-
-    // Viz Controls (General)
-    const settingsFolder = visualsMenu.addFolder('Visualizer Settings');
-    settingsFolder.add(this.params, 'reactivity', 0.1, 3.0).name('Reactivity');
-    settingsFolder.add(this.params, 'bassReactivity', 0.5, 3.0).name('Bass Reactivity');
-
-    // Performance
-    const perfFolder = systemMenu.addFolder('Performance');
-    perfFolder.add(this.params, 'performanceMode', ['low', 'balanced', 'high'])
-      .name('Preset')
-      .onChange((mode) => this.applyPerformancePreset(mode));
-    perfFolder.add(this.params, 'particleCount', 300, 4000, 50)
-      .name('Particle Count')
-      .onFinishChange(() => this.rebuildParticles());
-    perfFolder.add(this.params, 'starCount', 100, 3000, 50)
-      .name('Star Count')
-      .onFinishChange(() => this.rebuildStars());
-
-    // Ring Settings
-    const ringFolder = visualsMenu.addFolder('Ring Settings');
-    ringFolder.add(this.params, 'ringRadius', 1, 10).name('Radius').onChange(() => this.rebuildRing());
-    ringFolder.add(this.params, 'ringTube', 0.05, 1).name('Tube Thickness').onChange(() => this.rebuildRing());
-    ringFolder.add(this.params, 'ringColorCycle').name('Color Cycle');
-    ringFolder.add(this.params, 'ringColorSpeed', 0.1, 4.0).name('Color Speed');
-
-    const tunnelFolder = visualsMenu.addFolder('Tunnel Settings');
-    tunnelFolder.add(this.params, 'tunnelWidth', 8, 24).name('Width');
-
-    const planeFolder = visualsMenu.addFolder('Pulse Plane Settings');
-    planeFolder.add(this.params, 'planeOpacity', 0.05, 0.8).name('Opacity').onChange((v) => {
-      if (this.pulsePlane) this.pulsePlane.material.opacity = v;
-    });
-
-    vizFolder.open();
-
-    // Theme
-    const themeFolder = lookMenu.addFolder('Theme');
-    themeFolder.add(this.params, 'theme', Object.keys(this.themes))
-      .name('Preset')
-      .onChange((theme) => this.applyTheme(theme));
-    themeFolder.addColor(this.params, 'primaryColor').name('Primary').listen().onChange((c) => this.updateColors());
-    themeFolder.addColor(this.params, 'secondaryColor').name('Secondary').listen().onChange((c) => this.updateColors());
-
-    // Bloom
-    const bloomFolder = lookMenu.addFolder('Bloom');
-    bloomFolder.add(this.params, 'bloomThreshold', 0, 1).name('Threshold').onChange((v) => this.bloomPass.threshold = v);
-    bloomFolder.add(this.params, 'bloomStrength', 0, 3).name('Strength').onChange((v) => this.bloomPass.strength = v);
-    bloomFolder.add(this.params, 'bloomRadius', 0, 1).name('Radius').onChange((v) => this.bloomPass.radius = v);
-
-    // Effects
-    const fxFolder = motionMenu.addFolder('Effects');
-    fxFolder.add(this.params, 'cameraShakeOnBeat').name('Camera Shake');
-    fxFolder.add(this.params, 'particlesOnBeat').name('Particle Burst');
-    fxFolder.add(this.params, 'autoRotate').name('Auto Rotate');
-    fxFolder.add(this.params, 'showStars').name('Stars').onChange(() => this.updateVisualizerVisibility());
-
-    const cameraFolder = motionMenu.addFolder('Camera Director');
-    cameraFolder.add(this.params, 'cameraChoreo').name('Auto Cam Choreo');
-    cameraFolder.add(this.params, 'cameraChoreoMode', ['orbit', 'pulse', 'drift']).name('Mode');
-
-    const sectionFolder = motionMenu.addFolder('Section Director');
-    sectionFolder.add(this.params, 'sectionAware').name('Auto Section Switch');
-
-    const presetFolder = systemMenu.addFolder('Presets');
-    presetFolder.add(this, 'savePresetToFile').name('💾 Save Preset (.json)');
-    presetFolder.add(this, 'loadPresetFromFile').name('📂 Load Preset (.json)');
-
-    // Audio
-    const audioFolder = systemMenu.addFolder('Audio');
-    audioFolder.add(this, 'toggleMicrophone').name('🎤 Use Microphone');
-    audioFolder.add(this, 'toggleDesktopAudio').name('🖥️ Desktop Audio');
-    audioFolder.add(this.params, 'beatSensitivity', 0.5, 2.0).name('Beat Sensitivity');
-
-    // Rainbow Colors
-    const rainbowFolder = lookMenu.addFolder('🌈 Rainbow Effect');
-    rainbowFolder.add(this.params, 'rainbow').name('Enable Rainbow');
-    rainbowFolder.add(this.params, 'rainbowSpeed', 0.1, 5.0).name('Speed');
-
-    visualsMenu.open();
-    lookMenu.close();
-    motionMenu.close();
-    systemMenu.close();
-
-    gui.close();
-  }
-
-  applyTheme(themeName) {
-    const theme = this.themes[themeName];
-    if (!theme) return;
-
-    this.params.primaryColor = theme.primary;
-    this.params.secondaryColor = theme.secondary;
-    this.params.accentColor = theme.accent;
-
-    this.scene.background = new THREE.Color(theme.bg);
-    this.scene.fog = new THREE.FogExp2(theme.bg, 0.05);
-
-    this.updateColors();
-  }
-
-  updateColors() {
-    const primary = new THREE.Color(this.params.primaryColor);
-    const secondary = new THREE.Color(this.params.secondaryColor);
-
-    if (this.sphereUniforms) {
-      this.sphereUniforms.uColor1.value = primary;
-      this.sphereUniforms.uColor2.value = secondary;
-    }
-
-    this.barMeshes.forEach((bar, i) => {
-      const color = primary.clone().lerp(secondary, i / this.barMeshes.length);
-      bar.material.color = color;
-      bar.material.emissive = color;
-    });
-
-    if (this.waveformLines.length > 0) {
-      this.waveformLines.forEach(line => {
-        line.material.color = primary;
-      });
-    }
-
-    if (this.tunnelLines && this.tunnelLines.length > 0) {
-      this.tunnelLines.forEach((line, i) => {
-        line.material.color = primary.clone().lerp(secondary, i / this.tunnelLines.length);
-      });
-    }
-
-    if (this.pulsePlane) {
-      this.pulsePlane.material.color = new THREE.Color(this.params.accentColor);
-    }
-  }
-
-  updateRainbowColors(time) {
-    const speed = this.params.rainbowSpeed;
-    const hue1 = (time * speed * 0.1) % 1;
-    const hue2 = (time * speed * 0.1 + 0.5) % 1;
-
-    const color1 = new THREE.Color().setHSL(hue1, 1, 0.5);
-    const color2 = new THREE.Color().setHSL(hue2, 1, 0.5);
-
-    this.params.primaryColor = '#' + color1.getHexString();
-    this.params.secondaryColor = '#' + color2.getHexString();
-
-    // Update dat.GUI controllers if needed (manual sync)
-    // this.updateColors() will apply the new colors to objects
-    this.updateColors();
-  }
-
-  toggleMicrophone() {
-    if (this.useMicrophone) {
-      this.useMicrophone = false;
-      console.log('Microphone disabled');
-      return;
-    }
-
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(stream => {
-        if (!this.audioContext) {
-          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-
-        this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 2048;
-        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-        const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(this.analyser);
-
-        this.useMicrophone = true;
-        this.isPlaying = true;
-        console.log('🎤 Microphone enabled');
-      })
-      .catch(err => {
-        console.error('Microphone error:', err);
-        alert('Could not access microphone');
-      });
-  }
-
-  toggleDesktopAudio() {
-    // Check if browser supports getDisplayMedia
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-      alert('Your browser does not support capturing system audio.');
-      return;
-    }
-
-    navigator.mediaDevices.getDisplayMedia({
-      video: true, // Video is required to capture audio
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false
-      }
-    })
-      .then(stream => {
-        // We only need the audio
-        const audioTrack = stream.getAudioTracks()[0];
-
-        if (!audioTrack) {
-          stream.getTracks().forEach(track => track.stop());
-          alert('No audio track found. Did you check "Share Audio"?');
-          return;
-        }
-
-        if (!this.audioContext) {
-          this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        } else if (this.audioContext.state === 'suspended') {
-          this.audioContext.resume();
-        }
-
-        this.analyser = this.audioContext.createAnalyser();
-        this.analyser.fftSize = 2048;
-        this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-        const source = this.audioContext.createMediaStreamSource(stream);
-        source.connect(this.analyser);
-        // Don't connect to destination to avoid feedback loop if capturing own output
-        // But for system audio, we usually want to hear it, so it depends.
-        // If capturing "system audio" it usually means "what I hear", so we don't need to output it again.
-
-        console.log('🖥️ Desktop Audio enabled');
-        this.isPlaying = true;
-        this.useMicrophone = false;
-        this.params.rainbow = true; // Fun default
-        this.updateRainbowColors(0);
-
-        // Stop stream when track ends (user clicks "Stop Sharing")
-        audioTrack.onended = () => {
-          console.log('Desktop Audio stopped');
-          if (this.analyser) {
-            this.analyser.disconnect();
-          }
-        };
-      })
-      .catch(err => {
-        console.error('Desktop Audio error:', err);
-      });
-  }
-
-  getPresetSnapshot() {
-    return {
-      params: { ...this.params }
-    };
-  }
-
-  applyPresetSnapshot(snapshot) {
-    if (!snapshot || !snapshot.params) return;
-
-    Object.assign(this.params, snapshot.params);
-    this.applyTheme(this.params.theme);
-
-    if (this.bloomPass) {
-      this.bloomPass.threshold = this.params.bloomThreshold;
-      this.bloomPass.strength = this.params.bloomStrength;
-      this.bloomPass.radius = this.params.bloomRadius;
-    }
-
-    this.rebuildBars();
-    this.rebuildRing();
-    this.rebuildParticles();
-    this.rebuildStars();
-    this.applyPerformancePreset(this.params.performanceMode || 'balanced');
-    this.updateVisualizerVisibility();
-  }
-
-  savePresetToFile() {
-    const payload = this.getPresetSnapshot();
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `visualizer-preset-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  loadPresetFromFile() {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json,application/json';
-    input.onchange = (e) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const parsed = JSON.parse(reader.result);
-          this.applyPresetSnapshot(parsed);
-        } catch (err) {
-          console.error('Invalid preset JSON:', err);
-          alert('Invalid preset file');
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }
-
-  attachEventListeners() {
-    this.audioFileInput.addEventListener('change', this.handleAudioFile);
-    window.addEventListener('resize', this.onWindowResize);
-
-    // Keyboard shortcuts
-    document.addEventListener('keydown', (e) => this.handleKeyboard(e));
-
-    // Drag & Drop
-    this.initDragDrop();
-
-    // Fullscreen button
-    this.initFullscreen();
-
-    // Hamburger menu
-    this.initHamburgerMenu();
-  }
-
-  handleKeyboard(e) {
-    // Ignore if typing in an input
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-
-    switch (e.code) {
-      case 'Space':
-        e.preventDefault();
-        this.togglePlayPause();
-        break;
-      case 'KeyF':
-        e.preventDefault();
-        this.toggleFullscreen();
-        break;
-      case 'KeyM':
-        e.preventDefault();
-        this.toggleMute();
-        break;
-      case 'ArrowLeft':
-        e.preventDefault();
-        this.seek(-5);
-        break;
-      case 'ArrowRight':
-        e.preventDefault();
-        this.seek(5);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        this.adjustVolume(0.1);
-        break;
-      case 'ArrowDown':
-        e.preventDefault();
-        this.adjustVolume(-0.1);
-        break;
-    }
-  }
-
-  togglePlayPause() {
-    if (!this.audioPlayer.src) return;
-    if (this.audioPlayer.paused) {
-      this.audioPlayer.play();
-    } else {
-      this.audioPlayer.pause();
-    }
-  }
-
-  toggleMute() {
-    this.audioPlayer.muted = !this.audioPlayer.muted;
-  }
-
-  seek(seconds) {
-    if (!this.audioPlayer.src) return;
-    this.audioPlayer.currentTime = Math.max(0, Math.min(
-      this.audioPlayer.duration,
-      this.audioPlayer.currentTime + seconds
-    ));
-  }
-
-  adjustVolume(delta) {
-    this.audioPlayer.volume = Math.max(0, Math.min(1, this.audioPlayer.volume + delta));
-  }
-
-  initDragDrop() {
-    const dropOverlay = document.getElementById('dropOverlay');
-    if (!dropOverlay) return;
-
-    let dragCounter = 0;
-
-    document.addEventListener('dragenter', (e) => {
-      e.preventDefault();
-      dragCounter++;
-      if (e.dataTransfer.types.includes('Files')) {
-        dropOverlay.classList.add('active');
-      }
-    });
-
-    document.addEventListener('dragleave', (e) => {
-      e.preventDefault();
-      dragCounter--;
-      if (dragCounter === 0) {
-        dropOverlay.classList.remove('active');
-      }
-    });
-
-    document.addEventListener('dragover', (e) => {
-      e.preventDefault();
-    });
-
-    document.addEventListener('drop', (e) => {
-      e.preventDefault();
-      dragCounter = 0;
-      dropOverlay.classList.remove('active');
-
-      const files = e.dataTransfer.files;
-      if (files.length > 0) {
-        const file = files[0];
-        if (file.type.startsWith('audio/')) {
-          this.loadAudioFile(file);
-        }
-      }
-    });
-  }
-
-  initFullscreen() {
-    const fullscreenBtn = document.getElementById('fullscreenBtn');
-    if (fullscreenBtn) {
-      fullscreenBtn.addEventListener('click', () => this.toggleFullscreen());
-    }
-
-    document.addEventListener('fullscreenchange', () => {
-      this.onWindowResize();
-      this.handleFullscreenUIVisibility();
-    });
-
-    // Track mouse movement to show/hide controls in fullscreen
-    this.fullscreenControlsTimeout = null;
-    const container = document.querySelector('.visualizer-container');
-    if (container) {
-      container.addEventListener('mousemove', () => {
-        if (document.fullscreenElement) {
-          this.showFullscreenControls();
-        }
-      });
-    }
-  }
-
-  showFullscreenControls() {
-    const container = document.querySelector('.visualizer-container');
-    if (!container) return;
-
-    container.classList.add('show-controls');
-
-    // Clear any existing timeout
-    if (this.fullscreenControlsTimeout) {
-      clearTimeout(this.fullscreenControlsTimeout);
-    }
-
-    // Hide controls after 2 seconds of no mouse movement
-    this.fullscreenControlsTimeout = setTimeout(() => {
-      if (document.fullscreenElement) {
-        container.classList.remove('show-controls');
-      }
-    }, 2000);
-  }
-
-  handleFullscreenUIVisibility() {
-    const container = document.querySelector('.visualizer-container');
-    if (!container) return;
-
-    if (document.fullscreenElement) {
-      // Entering fullscreen - initially show controls briefly
-      this.showFullscreenControls();
-    } else {
-      // Exiting fullscreen - ensure controls are visible
-      container.classList.remove('show-controls');
-      if (this.fullscreenControlsTimeout) {
-        clearTimeout(this.fullscreenControlsTimeout);
-      }
-    }
-  }
-
-  toggleFullscreen() {
-    const container = document.querySelector('.visualizer-container') || document.documentElement;
-
-    if (!document.fullscreenElement) {
-      container.requestFullscreen().catch(err => {
-        console.log('Fullscreen error:', err);
-      });
-    } else {
-      document.exitFullscreen();
-    }
-  }
-
-  initHamburgerMenu() {
-    const hamburgerBtn = document.getElementById('hamburgerBtn');
-    const navLinks = document.getElementById('navLinks');
-
-    if (hamburgerBtn && navLinks) {
-      hamburgerBtn.addEventListener('click', () => {
-        hamburgerBtn.classList.toggle('active');
-        navLinks.classList.toggle('active');
-      });
-
-      // Close menu when clicking a link
-      navLinks.querySelectorAll('a').forEach(link => {
-        link.addEventListener('click', () => {
-          hamburgerBtn.classList.remove('active');
-          navLinks.classList.remove('active');
-        });
-      });
-    }
-  }
-
-  showLoading() {
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    if (loadingOverlay) loadingOverlay.classList.add('active');
-  }
-
-  hideLoading() {
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    if (loadingOverlay) loadingOverlay.classList.remove('active');
-  }
-
-  loadAudioFile(file) {
-    if (!file) return;
-
-    console.log('Loading:', file.name);
-    this.showLoading();
-
-    // Create audio context on user interaction (required by browsers)
-    if (!this.audioContext) {
-      this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-
-    // Resume audio context if suspended
-    if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume();
-    }
-
-    // Only create analyser if not already created
-    if (!this.analyser) {
-      this.analyser = this.audioContext.createAnalyser();
-      this.analyser.fftSize = 2048;
-      this.analyser.smoothingTimeConstant = 0.8;
-    }
-    this.dataArray = new Uint8Array(this.analyser.frequencyBinCount);
-
-    const fileURL = URL.createObjectURL(file);
-    this.audioPlayer.src = fileURL;
-    this.audioPlayer.load();
-
-    this.audioPlayer.addEventListener('canplaythrough', () => {
-      this.hideLoading();
-    }, { once: true });
-
-    this.audioPlayer.play().then(() => {
-      console.log('▶️ Playing:', file.name);
-      this.hideLoading();
-
-      // Only create media element source once
-      if (!this.audioSource) {
-        this.audioSource = this.audioContext.createMediaElementSource(this.audioPlayer);
-        this.audioSource.connect(this.analyser);
-        this.analyser.connect(this.audioContext.destination);
-      }
-
-      this.isPlaying = true;
-      this.useMicrophone = false;
-    }).catch(err => {
-      console.error('Playback error:', err);
-      this.hideLoading();
-      alert('Could not play audio file. Try clicking the play button manually.');
-    });
-  }
-
-  handleAudioFile(e) {
-    const file = e.target.files[0];
-    this.loadAudioFile(file);
-  }
-
-  analyzeFrequencies() {
-    if (!this.analyser || !this.dataArray) {
-      this.frequencyBands = { bass: 0.05, mid: 0.05, treble: 0.05, average: 0.05 };
-      return;
-    }
-
-    this.analyser.getByteFrequencyData(this.dataArray);
-
-    const bufferLength = this.dataArray.length;
-    const bassEnd = Math.floor(bufferLength * 0.1);
-    const midEnd = Math.floor(bufferLength * 0.5);
-
-    let bassSum = 0, midSum = 0, trebleSum = 0;
-
-    for (let i = 0; i < bassEnd; i++) {
-      bassSum += this.dataArray[i];
-    }
-    for (let i = bassEnd; i < midEnd; i++) {
-      midSum += this.dataArray[i];
-    }
-    for (let i = midEnd; i < bufferLength; i++) {
-      trebleSum += this.dataArray[i];
-    }
-
-    this.frequencyBands.bass = (bassSum / bassEnd / 255) * this.params.bassReactivity;
-    this.frequencyBands.mid = (midSum / (midEnd - bassEnd) / 255) * this.params.reactivity;
-    this.frequencyBands.treble = (trebleSum / (bufferLength - midEnd) / 255) * this.params.reactivity;
-    this.frequencyBands.average = (this.frequencyBands.bass + this.frequencyBands.mid + this.frequencyBands.treble) / 3;
-
-    // Beat detection
-    this.detectBeat();
-  }
-
-  detectBeat() {
-    const currentEnergy = this.frequencyBands.bass;
-    const threshold = this.beatDetector.energy * this.params.beatSensitivity;
-
-    if (this.beatDetector.beatCooldown > 0) {
-      this.beatDetector.beatCooldown--;
-    }
-
-    if (currentEnergy > threshold && currentEnergy > 0.3 && this.beatDetector.beatCooldown === 0) {
-      this.beatDetector.lastBeat = 1.0;
-      this.beatDetector.beatCooldown = 10; // Cooldown frames
-      this.onBeat();
-    }
-
-    this.beatDetector.lastBeat *= 0.9;
-    this.beatDetector.energy = this.beatDetector.energy * this.beatDetector.decay + currentEnergy * (1 - this.beatDetector.decay);
-  }
-
-  onBeat() {
-    this.sectionDirector.beatHits++;
-
-    // Camera shake
-    if (this.params.cameraShakeOnBeat) {
-      this.cameraShake.intensity = 0.1;
-    }
-
-    // Particle burst
-    if (this.params.particlesOnBeat && this.particles) {
-      const positions = this.particles.geometry.attributes.position.array;
-      const velocities = this.particles.velocities;
-
-      for (let i = 0; i < velocities.length; i++) {
-        velocities[i].x += (Math.random() - 0.5) * 0.2;
-        velocities[i].y += (Math.random() - 0.5) * 0.2;
-        velocities[i].z += (Math.random() - 0.5) * 0.2;
-      }
-    }
-  }
-
-  updateSphere(time) {
-    if (!this.sphereMesh || !this.sphereUniforms) return;
-
-    // Idle breathing animation when no audio
-    const isIdle = this.frequencyBands.average < 0.1;
-    let idleBreathing = 0;
-    let idleMorph = 0;
-
-    if (isIdle) {
-      // Slow breathing scale animation
-      idleBreathing = Math.sin(time * 0.5) * 0.08;
-      // Gentle morphing effect
-      idleMorph = Math.sin(time * 0.3) * 0.05;
-
-      // Apply breathing scale
-      const baseScale = 1 + idleBreathing;
-      this.sphereMesh.scale.set(baseScale, baseScale, baseScale);
-    } else {
-      // Reset scale when audio is playing
-      this.sphereMesh.scale.set(1, 1, 1);
-    }
-
-    this.sphereUniforms.uTime.value = time;
-    this.sphereUniforms.uBass.value = this.frequencyBands.bass + idleMorph;
-    this.sphereUniforms.uMid.value = this.frequencyBands.mid + idleMorph * 0.5;
-    this.sphereUniforms.uTreble.value = this.frequencyBands.treble;
-    this.sphereUniforms.uBeat.value = this.beatDetector.lastBeat;
-    this.sphereUniforms.uReactivity.value = this.params.reactivity;
-
-    this.sphereMesh.rotation.y += this.params.sphereRotationSpeed * (1 + this.frequencyBands.bass);
-    this.sphereMesh.rotation.x += this.params.sphereRotationSpeed * 0.5;
-  }
-
-  updateBars() {
-    if (!this.dataArray) {
-      // Idle pulsing animation for bars
-      const time = this.clock.getElapsedTime();
-      this.barMeshes.forEach((bar, i) => {
-        const idlePulse = 0.3 + Math.sin(time * 0.8 + i * 0.15) * 0.15;
-        bar.scale.y = THREE.MathUtils.lerp(bar.scale.y, idlePulse, 0.1);
-        bar.position.y = bar.scale.y / 2;
-        bar.material.emissiveIntensity = 0.3 + Math.sin(time + i * 0.1) * 0.2;
-      });
-      return;
-    }
-
-    const step = Math.floor(this.dataArray.length / this.barMeshes.length);
-
-    this.barMeshes.forEach((bar, i) => {
-      const value = this.dataArray[i * step] / 255;
-      const targetHeight = 0.1 + value * 3 * this.params.reactivity;
-
-      bar.scale.y = THREE.MathUtils.lerp(bar.scale.y, targetHeight, 0.3);
-      bar.position.y = bar.scale.y / 2;
-
-      // Color based on frequency
-      const hue = (i / this.barMeshes.length) * 0.3;
-      bar.material.emissiveIntensity = 0.3 + value * 0.7;
-    });
-  }
-
-  updateParticles(time) {
-    if (!this.particles || !this.particleSystem) return;
-
-    const positions = this.particles.geometry.attributes.position.array;
-    const velocities = this.particles.velocities;
-
-    for (let i = 0; i < velocities.length; i++) {
-      const i3 = i * 3;
-
-      // Apply velocity
-      positions[i3] += velocities[i].x * (1 + this.frequencyBands.bass);
-      positions[i3 + 1] += velocities[i].y * (1 + this.frequencyBands.mid);
-      positions[i3 + 2] += velocities[i].z * (1 + this.frequencyBands.treble);
-
-      // Return to original position
-      velocities[i].x *= 0.98;
-      velocities[i].y *= 0.98;
-      velocities[i].z *= 0.98;
-
-      positions[i3] += (velocities[i].originalX - positions[i3]) * 0.01;
-      positions[i3 + 1] += (velocities[i].originalY - positions[i3 + 1]) * 0.01;
-      positions[i3 + 2] += (velocities[i].originalZ - positions[i3 + 2]) * 0.01;
-
-      // Orbit
-      const angle = time * this.params.particleSpeed + i * 0.01;
-      positions[i3] += Math.sin(angle) * 0.01;
-      positions[i3 + 2] += Math.cos(angle) * 0.01;
-    }
-
-    this.particles.geometry.attributes.position.needsUpdate = true;
-    this.particleSystem.rotation.y += 0.001 * (1 + this.frequencyBands.average);
-  }
-
-  updateWaveform() {
-    if (this.waveformLines.length === 0) return;
-
-    const segmentCount = 256;
-
-    // Shift history
-    this.waveHistory.pop(); // Remove oldest
-
-    // Create new data entry
-    let newData = new Float32Array(segmentCount);
-
-    const time = this.clock.getElapsedTime();
-
-    if (!this.dataArray) {
-      // Ambient wave animation when no audio
-      for (let i = 0; i < segmentCount; i++) {
-        const x = (i / segmentCount) * Math.PI * 4;
-        newData[i] = Math.sin(x + time * 2.0) * 0.2 + Math.sin(x * 2 + time * 3.0) * 0.1;
-      }
-    } else {
-      // Audio data
-      const step = Math.floor(this.dataArray.length / segmentCount);
-      for (let i = 0; i < segmentCount; i++) {
-        const value = this.dataArray[i * step] / 255;
-        newData[i] = value * 2.5 * this.params.reactivity; // Scale up height
-      }
-    }
-
-    // Add new data to front of history
-    this.waveHistory.unshift(newData);
-
-    // Update all lines based on history
-    this.waveformLines.forEach((line, index) => {
-      if (this.waveHistory[index]) {
-        const positions = line.geometry.attributes.position.array;
-        const data = this.waveHistory[index];
-        const len = positions.length / 3;
-
-        for (let i = 0; i < len; i++) {
-          if (data[i] !== undefined) {
-            positions[i * 3 + 1] = data[i];
-          }
-        }
-        line.geometry.attributes.position.needsUpdate = true;
-      }
-    });
-  }
-
-  updateRing(time) {
-    if (!this.ringMesh || !this.ringUniforms) return;
-
-    this.ringUniforms.uTime.value = time;
-    this.ringUniforms.uBass.value = this.frequencyBands.bass;
-    this.ringUniforms.uMid.value = this.frequencyBands.mid;
-    this.ringUniforms.uTreble.value = this.frequencyBands.treble;
-
-    // Streamlined color logic:
-    // - If global rainbow is on, ring follows global palette (no extra ring-only cycle).
-    // - Ring-only cycle is used only when rainbow is off.
-    if (this.params.rainbow) {
-      this.ringUniforms.uColor1.value.set(this.params.primaryColor);
-      this.ringUniforms.uColor2.value.set(this.params.secondaryColor);
-    } else if (this.params.ringColorCycle) {
-      const speed = this.params.ringColorSpeed;
-      const hue1 = (time * speed * 0.08) % 1;
-      const hue2 = (hue1 + 0.28 + this.frequencyBands.bass * 0.1) % 1;
-      this.ringUniforms.uColor1.value.setHSL(hue1, 0.9, 0.55);
-      this.ringUniforms.uColor2.value.setHSL(hue2, 0.9, 0.6);
-    } else {
-      this.ringUniforms.uColor1.value.set(this.params.primaryColor);
-      this.ringUniforms.uColor2.value.set(this.params.secondaryColor);
-    }
-
-    // Pulse scale with bass
-    const scale = 1 + this.frequencyBands.bass * 0.2;
-    this.ringMesh.scale.set(scale, scale, scale);
-
-    // Rotate ring
-    this.ringMesh.rotation.z += 0.005; // Spin around center
-    this.ringMesh.rotation.x = Math.PI / 2 + Math.sin(time * 0.5) * 0.2; // Wobble
-  }
-
-  updateTunnel(time) {
-    if (!this.tunnelLines || this.tunnelLines.length === 0) return;
-
-    const bass = this.frequencyBands.bass;
-    const wave = (this.frequencyBands.mid + this.frequencyBands.treble) * 0.8;
-
-    this.tunnelLines.forEach((line, i) => {
-      const positions = line.geometry.attributes.position.array;
-      const z = line.userData.baseZ;
-      const y = Math.sin(time * 2 + i * 0.35) * (0.3 + bass * 1.2);
-      const width = this.params.tunnelWidth * (0.5 + wave * 0.5);
-
-      positions[0] = -width / 2;
-      positions[1] = y;
-      positions[2] = z;
-      positions[3] = width / 2;
-      positions[4] = -y;
-      positions[5] = z;
-      line.geometry.attributes.position.needsUpdate = true;
-
-      line.material.opacity = Math.max(0.08, 1 - i / this.tunnelLines.length) * (0.6 + bass * 0.8);
-    });
-  }
-
-  updatePulsePlane(time) {
-    if (!this.pulsePlane) return;
-
-    const bass = this.frequencyBands.bass;
-    const beat = this.beatDetector.lastBeat;
-    const scale = 1 + bass * 0.35 + beat * 0.25;
-
-    this.pulsePlane.scale.set(scale, scale, 1);
-    this.pulsePlane.rotation.z = Math.sin(time * 0.6) * 0.1;
-    this.pulsePlane.material.opacity = Math.min(0.95, this.params.planeOpacity + bass * 0.35);
-  }
-
-  applySectionPreset(mode) {
-    if (mode === 'drop') {
-      this.params.showBars = true;
-      this.params.showRing = true;
-      this.params.showTunnel = true;
-      this.params.showWaveform = false;
-    } else if (mode === 'build') {
-      this.params.showBars = false;
-      this.params.showRing = true;
-      this.params.showTunnel = true;
-      this.params.showWaveform = true;
-    } else {
-      this.params.showBars = false;
-      this.params.showRing = true;
-      this.params.showTunnel = false;
-      this.params.showWaveform = true;
-    }
-    this.updateVisualizerVisibility();
-  }
-
-  updateSectionDirector(time) {
-    if (!this.params.sectionAware) return;
-    if (time < this.sectionDirector.holdUntil) return;
-
-    const energy = this.frequencyBands.average;
-    let nextMode = 'calm';
-    if (energy > 0.45 || this.sectionDirector.beatHits >= 3) {
-      nextMode = 'drop';
-    } else if (energy > 0.24) {
-      nextMode = 'build';
-    }
-
-    if (nextMode !== this.sectionDirector.mode && (time - this.sectionDirector.lastSwitch > 3)) {
-      this.sectionDirector.mode = nextMode;
-      this.sectionDirector.lastSwitch = time;
-      this.sectionDirector.holdUntil = time + 6;
-      this.sectionDirector.beatHits = 0;
-      this.applySectionPreset(nextMode);
-    }
-  }
-
-  updateCameraChoreo(time) {
-    if (!this.params.cameraChoreo || !this.sphericalCoords) return;
-
-    const beat = this.beatDetector.lastBeat;
-    const bass = this.frequencyBands.bass;
-
-    if (this.params.cameraChoreoMode === 'drift') {
-      this.camChoreoState.targetRadius = 6.2 + Math.sin(time * 0.18) * 1.0;
-      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.35 + Math.sin(time * 0.2) * 0.25, 0.04);
-      this.sphericalCoords.theta += 0.002 + bass * 0.003;
-    } else if (this.params.cameraChoreoMode === 'pulse') {
-      this.camChoreoState.targetRadius = 4.2 + beat * 2.4 + bass * 0.8;
-      this.sphericalCoords.theta += 0.004 + beat * 0.012;
-      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.55 + Math.sin(time * 0.9) * 0.12, 0.08);
-    } else {
-      // orbit
-      this.camChoreoState.targetRadius = 5.2 + Math.sin(time * 0.45) * 0.45 + bass * 0.45;
-      this.sphericalCoords.theta += 0.0035 + bass * 0.004;
-      this.sphericalCoords.phi = THREE.MathUtils.lerp(this.sphericalCoords.phi, 1.45 + Math.sin(time * 0.35) * 0.18, 0.05);
-    }
-
-    this.sphericalCoords.radius = THREE.MathUtils.lerp(this.sphericalCoords.radius, this.camChoreoState.targetRadius, 0.08);
-    this.updateCameraPosition(this.sphericalCoords);
-  }
-
-  updateCamera(time) {
-    if (this.params.cameraChoreo) {
-      this.updateCameraChoreo(time);
-    } else if (this.params.autoRotate) {
-      this.sphericalCoords.theta += this.params.autoRotateSpeed * 0.01;
-      this.updateCameraPosition(this.sphericalCoords);
-    }
-
-    // Camera shake
-    if (this.cameraShake.intensity > 0.001) {
-      this.camera.position.x += (Math.random() - 0.5) * this.cameraShake.intensity;
-      this.camera.position.y += (Math.random() - 0.5) * this.cameraShake.intensity;
-      this.cameraShake.intensity *= this.cameraShake.decay;
-    }
-
-    // Camera pulse with bass
-    if (this.params.cameraPulse) {
-      const bassPulse = 1 + this.frequencyBands.bass * 0.1;
-      this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, 75 * bassPulse, 0.1);
-      this.camera.updateProjectionMatrix();
-    }
-
-    this.camera.lookAt(this.cameraTarget);
-  }
-
-  updateBackgroundStars(time) {
-    if (!this.backgroundStars) return;
-    this.backgroundStars.rotation.y = time * 0.02;
-    this.backgroundStars.rotation.x = time * 0.01;
-  }
-
-  onWindowResize() {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
-    if (this.composer) {
-      this.composer.setSize(window.innerWidth, window.innerHeight);
-    }
-  }
-
-  animate() {
-    this.animationFrameId = requestAnimationFrame(this.animate);
-
-    const time = this.clock.getElapsedTime();
-
-    // Rainbow effect
-    if (this.params.rainbow) {
-      this.updateRainbowColors(time);
-    }
-
-    // Analyze audio
-    this.analyzeFrequencies();
-    this.updateSectionDirector(time);
-
-    // Update visualizers
-    this.updateSphere(time);
-    this.updateBars();
-    this.updateParticles(time);
-    this.updateWaveform();
-    this.updateRing(time);
-    this.updateTunnel(time);
-    this.updatePulsePlane(time);
-    this.updateBackgroundStars(time);
-
-    // Update camera
-    this.updateCamera(time);
-
-    // Render
-    if (this.composer) {
-      this.composer.render();
-    } else {
-      this.renderer.render(this.scene, this.camera);
-    }
-  }
-
-  dispose() {
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-    }
-
-    this.audioFileInput.removeEventListener('change', this.handleAudioFile);
-    window.removeEventListener('resize', this.onWindowResize);
-
-    if (this.audioContext && this.audioContext.state !== 'closed') {
-      this.audioContext.close();
-    }
-  }
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-  window.particleBackground = new ParticleBackground();
-  window.visualizer = new AudioVisualizer();
+// Static ES modules: deploy these three files directly to GitHub Pages.
+const $ = (id) => document.getElementById(id);
+const audio = $('audio');
+const settings = ['sensitivity', 'bloomStrength', 'bloomRadius', 'bloomThreshold', 'exposure', 'rotation'];
+const defaults = { sensitivity: 1.2, bloomStrength: 0.85, bloomRadius: 0.5, bloomThreshold: 0.2, exposure: 1.1, rotation: 0.25 };
+const palettes = {
+  aurora: { a: '#7bf2d1', b: '#428dff', rgb: '123,242,209' },
+  ember: { a: '#ffc76e', b: '#ff546e', rgb: '255,199,110' },
+  violet: { a: '#bba1ff', b: '#ff66c5', rgb: '187,161,255' },
+};
+let app, audioContext, analyser, outputGain, mediaSource, frequencyData;
+let objectURL, loadedFile = false, demoActive = false, demoTimer, demoBus;
+let operationGeneration = 0, playingRequest = false;
+let demoStep = 0, nextDemoTime = 0, elapsed = 0;
+const levels = { bass: 0, mid: 0, high: 0 };
+const bars = Array.from({ length: 40 }, () => {
+  const bar = document.createElement('i');
+  $('spectrum').appendChild(bar);
+  return bar;
 });
+
+function message(text, isError = false) {
+  $('message').textContent = text;
+  $('message').classList.toggle('error', isError);
+}
+function timeLabel(seconds) {
+  if (!Number.isFinite(seconds)) return '0:00';
+  return `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, '0')}`;
+}
+function syncPlaybackUI() {
+  const playing = demoActive || !audio.paused;
+  $('playButton').textContent = playing ? 'Ⅱ' : '▶';
+  $('playButton').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  $('playButton').disabled = !app || (!loadedFile && !demoActive) || playingRequest;
+  $('modeTag').textContent = demoActive ? 'DEMO' : playing ? 'PLAYING' : loadedFile ? 'READY' : 'IDLE';
+  $('demoButton').textContent = demoActive ? 'Stop demo' : 'Try demo';
+  $('demoButton').setAttribute('aria-pressed', String(demoActive));
+  $('seek').disabled = demoActive || !Number.isFinite(audio.duration) || audio.duration <= 0;
+}
+
+// The browser allows AudioContext to start only after a user gesture.
+async function ensureAudio() {
+  if (!audioContext) {
+    const Context = window.AudioContext || window.webkitAudioContext;
+    if (!Context) throw new Error('Web Audio is unavailable in this browser.');
+    audioContext = new Context();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
+    frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    outputGain = audioContext.createGain();
+    outputGain.gain.value = Number($('volume').value);
+    analyser.connect(outputGain);
+    outputGain.connect(audioContext.destination);
+    // Create once, reuse when the audio element's src changes.
+    mediaSource = audioContext.createMediaElementSource(audio);
+    mediaSource.connect(analyser);
+  }
+  await audioContext.resume();
+}
+
+function stopDemo() {
+  clearInterval(demoTimer);
+  demoTimer = undefined;
+  demoActive = false;
+  if (demoBus) {
+    demoBus.gain.value = 0;
+    demoBus.disconnect();
+    demoBus = undefined;
+  }
+  $('trackName').textContent = loadedFile ? audio.dataset.filename : 'No track selected';
+  $('trackDetail').textContent = 'Your files stay on this device';
+  $('currentTime').textContent = timeLabel(audio.currentTime);
+  $('duration').textContent = timeLabel(audio.duration);
+  syncPlaybackUI();
+}
+function demoVoice(frequency, when, length, volume, type = 'sine', kick = false) {
+  const oscillator = audioContext.createOscillator();
+  const envelope = audioContext.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, when);
+  if (kick) oscillator.frequency.exponentialRampToValueAtTime(42, when + length);
+  envelope.gain.setValueAtTime(0.001, when);
+  envelope.gain.exponentialRampToValueAtTime(volume, when + 0.008);
+  envelope.gain.exponentialRampToValueAtTime(0.001, when + length);
+  oscillator.connect(envelope);
+  envelope.connect(demoBus);
+  oscillator.start(when);
+  oscillator.stop(when + length + 0.02);
+  oscillator.onended = () => { oscillator.disconnect(); envelope.disconnect(); };
+}
+function scheduleDemo() {
+  while (nextDemoTime < audioContext.currentTime + 0.25) {
+    if (demoStep % 4 === 0) demoVoice(150, nextDemoTime, 0.25, 0.8, 'sine', true);
+    demoVoice(5200 + (demoStep % 3) * 600, nextDemoTime, 0.035, demoStep % 2 ? 0.025 : 0.045, 'triangle');
+    if (demoStep % 2 === 0) {
+      const notes = [130.81, 164.81, 196, 261.63, 196, 164.81, 146.83, 196];
+      demoVoice(notes[(demoStep / 2) % notes.length], nextDemoTime, 0.3, 0.14, 'triangle');
+    }
+    demoStep = (demoStep + 1) % 16;
+    nextDemoTime += 0.125;
+  }
+}
+$('demoButton').addEventListener('click', async () => {
+  const generation = ++operationGeneration;
+  if (demoActive) { stopDemo(); message('Demo stopped. Load a track or play your selection.'); return; }
+  audio.pause();
+  try {
+    await ensureAudio();
+    if (generation !== operationGeneration) return;
+    stopDemo();
+    demoBus = audioContext.createGain();
+    demoBus.gain.value = 0.65;
+    demoBus.connect(analyser);
+    demoActive = true;
+    nextDemoTime = audioContext.currentTime + 0.04;
+    demoStep = 0;
+    scheduleDemo();
+    demoTimer = setInterval(scheduleDemo, 100);
+    $('trackName').textContent = 'Orbit / built-in synth';
+    $('trackDetail').textContent = '120 BPM · generated in your browser';
+    $('currentTime').textContent = 'LIVE';
+    $('duration').textContent = '∞';
+    message('Demo playing. Try the palettes and glow controls.');
+    syncPlaybackUI();
+  } catch (error) { message(error.message, true); }
+});
+$('playButton').addEventListener('click', async () => {
+  ++operationGeneration;
+  if (demoActive) { stopDemo(); message('Demo paused. Click Try demo to restart.'); return; }
+  if (!audio.paused) { audio.pause(); message('Paused. Press play to resume.'); return; }
+  const generation = operationGeneration;
+  playingRequest = true;
+  syncPlaybackUI();
+  try {
+    await ensureAudio();
+    if (generation !== operationGeneration) return;
+    if (audio.ended) audio.currentTime = 0;
+    await audio.play();
+    message('Playing your track. Drag the sphere to change the view.');
+  } catch (error) {
+    if (error.name !== 'AbortError') message('Unable to play this file. Try an MP3 or WAV supported by your browser.', true);
+  } finally { playingRequest = false; syncPlaybackUI(); }
+});
+
+function loadFile(file) {
+  if (!file) return;
+  if (!file.type.startsWith('audio/') && !/\.(mp3|wav|ogg|m4a|flac|aac|aiff|opus|weba)$/i.test(file.name)) {
+    message('Choose an audio file such as MP3, WAV, OGG or M4A.', true);
+    return;
+  }
+  ++operationGeneration;
+  stopDemo();
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+  if (objectURL) URL.revokeObjectURL(objectURL);
+  objectURL = URL.createObjectURL(file);
+  audio.src = objectURL;
+  audio.dataset.filename = file.name;
+  loadedFile = true;
+  $('trackName').textContent = file.name;
+  $('trackDetail').textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · local audio`;
+  $('currentTime').textContent = '0:00';
+  $('duration').textContent = '0:00';
+  $('seek').value = 0;
+  message('Track loaded. Press play to begin.');
+  syncPlaybackUI();
+}
+$('audioUpload').addEventListener('change', (event) => {
+  loadFile(event.target.files[0]);
+  event.target.value = ''; // Selecting the same file again must still fire change.
+});
+const panel = document.querySelector('.visual-panel');
+let dragDepth = 0;
+panel.addEventListener('dragenter', (event) => { event.preventDefault(); ++dragDepth; panel.classList.add('dragging'); });
+panel.addEventListener('dragover', (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; });
+panel.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; panel.classList.remove('dragging'); } });
+panel.addEventListener('drop', (event) => { event.preventDefault(); dragDepth = 0; panel.classList.remove('dragging'); loadFile(event.dataTransfer.files[0]); });
+// Prevent dropped files from navigating away from the visualizer.
+window.addEventListener('dragover', (event) => event.preventDefault());
+window.addEventListener('drop', (event) => event.preventDefault());
+for (const event of ['play', 'pause', 'ended', 'loadedmetadata', 'durationchange']) {
+  audio.addEventListener(event, () => {
+    if (!demoActive) $('duration').textContent = timeLabel(audio.duration);
+    if (event === 'ended' && !demoActive) message('Track finished. Press play to listen again.');
+    syncPlaybackUI();
+  });
+}
+audio.addEventListener('timeupdate', () => {
+  if (demoActive) return;
+  $('currentTime').textContent = timeLabel(audio.currentTime);
+  if (Number.isFinite(audio.duration) && audio.duration > 0) $('seek').value = audio.currentTime / audio.duration * 100;
+});
+audio.addEventListener('error', () => {
+  if (!audio.getAttribute('src')) return;
+  loadedFile = false;
+  message('This audio format could not be decoded. Try an MP3 or WAV file.', true);
+  syncPlaybackUI();
+});
+$('seek').addEventListener('input', () => {
+  if (!demoActive && Number.isFinite(audio.duration)) audio.currentTime = Number($('seek').value) / 100 * audio.duration;
+});
+$('volume').addEventListener('input', () => {
+  const volume = Number($('volume').value);
+  $('volumeValue').value = `${Math.round(volume * 100)}%`;
+  if (outputGain) outputGain.gain.setTargetAtTime(volume, audioContext.currentTime, 0.025);
+});
+
+function applySettings() {
+  for (const id of settings) $(id + 'Value').value = Number($(id).value).toFixed(2);
+  if (!app) return;
+  app.bloom.strength = Number($('bloomStrength').value);
+  app.bloom.radius = Number($('bloomRadius').value);
+  app.bloom.threshold = Number($('bloomThreshold').value);
+  app.renderer.toneMappingExposure = Number($('exposure').value);
+}
+settings.forEach((id) => $(id).addEventListener('input', applySettings));
+function setPalette(name) {
+  const palette = palettes[name];
+  document.documentElement.style.setProperty('--accent', palette.a);
+  document.documentElement.style.setProperty('--accent-rgb', palette.rgb);
+  document.querySelectorAll('.palette').forEach((button) => {
+    const active = button.dataset.palette === name;
+    button.classList.toggle('active', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  if (app) {
+    app.uniforms.uColorA.value.set(palette.a);
+    app.uniforms.uColorB.value.set(palette.b);
+    app.dust.material.color.set(palette.a);
+    app.rings.forEach((ring) => ring.material.color.set(palette.a));
+  }
+}
+document.querySelectorAll('.palette').forEach((button) => button.addEventListener('click', () => setPalette(button.dataset.palette)));
+$('resetButton').addEventListener('click', () => {
+  for (const id of settings) $(id).value = defaults[id];
+  applySettings(); setPalette('aurora');
+  if (app) { app.controls.reset(); app.sphere.rotation.set(0, 0, 0.18); }
+});
+function toggleFocus(force) {
+  const active = typeof force === 'boolean' ? force : !document.body.classList.contains('immersive');
+  document.body.classList.toggle('immersive', active);
+  $('focusButton').setAttribute('aria-pressed', String(active));
+  $('focusButton').querySelector('span').textContent = active ? 'Exit immersive view' : 'Immersive view';
+}
+$('focusButton').addEventListener('click', () => toggleFocus());
+window.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') toggleFocus(false);
+});
+
+function band(low, high) {
+  const binHz = audioContext.sampleRate / analyser.fftSize;
+  const start = Math.max(1, Math.floor(low / binHz));
+  const end = Math.min(frequencyData.length, Math.ceil(high / binHz));
+  let sum = 0;
+  for (let i = start; i < end; i++) sum += frequencyData[i];
+  return sum / Math.max(1, end - start) / 255;
+}
+function updateAudio(delta) {
+  const active = analyser && (demoActive || !audio.paused);
+  if (active) analyser.getByteFrequencyData(frequencyData);
+  const blend = 1 - Math.exp(-delta * 9);
+  for (const [key, low, high] of [['bass', 30, 250], ['mid', 250, 2500], ['high', 2500, 12000]]) {
+    const target = active ? band(low, high) : 0;
+    levels[key] += (target - levels[key]) * blend;
+  }
+  bars.forEach((bar, index) => {
+    let level = 0;
+    if (active) {
+      const low = 30 * Math.pow(16000 / 30, index / bars.length);
+      const high = 30 * Math.pow(16000 / 30, (index + 1) / bars.length);
+      level = band(low, high);
+    }
+    bar.style.transform = `scaleY(${Math.max(0.035, level)})`;
+  });
+}
+
+async function init() {
+  try {
+    // These are named module exports, NOT constructors on the THREE namespace.
+    const [THREE, { EffectComposer }, { RenderPass }, { UnrealBloomPass }, { OutputPass }, { OrbitControls }] = await Promise.all([
+      import('three'),
+      import('three/addons/postprocessing/EffectComposer.js'),
+      import('three/addons/postprocessing/RenderPass.js'),
+      import('three/addons/postprocessing/UnrealBloomPass.js'),
+      import('three/addons/postprocessing/OutputPass.js'),
+      import('three/addons/controls/OrbitControls.js'),
+    ]);
+    const viewport = $('viewport');
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(43, 1, 0.1, 100);
+    camera.position.set(0, 0.25, 5.7);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.setClearColor(0x000000, 0);
+    viewport.appendChild(renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 3.5;
+    controls.maxDistance = 10;
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), defaults.bloomStrength, defaults.bloomRadius, defaults.bloomThreshold);
+    composer.addPass(bloom);
+    composer.addPass(new OutputPass());
+    const uniforms = {
+      uTime: { value: 0 }, uBass: { value: 0 }, uMid: { value: 0 }, uHigh: { value: 0 },
+      uColorA: { value: new THREE.Color(palettes.aurora.a) }, uColorB: { value: new THREE.Color(palettes.aurora.b) },
+    };
+    const material = new THREE.ShaderMaterial({
+      uniforms, wireframe: true, transparent: true,
+      vertexShader: `
+        uniform float uTime, uBass, uMid, uHigh;
+        varying vec3 vPosition;
+        varying float vWave;
+        void main() {
+          vec3 n = normalize(position);
+          float wave = sin(n.x * 6.0 + uTime * 0.8) * cos(n.y * 5.0 - uTime * 0.6)
+                     * sin(n.z * 5.0 + uTime * 0.5);
+          float ripple = sin(n.y * 18.0 + n.x * 9.0 + uTime * 2.0);
+          float radius = 1.0 + uBass * 0.30 + wave * (0.025 + uMid * 0.23) + ripple * uHigh * 0.07;
+          vec3 p = position * radius;
+          vPosition = p; vWave = wave;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }`,
+      fragmentShader: `
+        uniform vec3 uColorA, uColorB;
+        uniform float uBass;
+        varying vec3 vPosition;
+        varying float vWave;
+        void main() {
+          float mixAmount = clamp(vPosition.y * 0.36 + 0.5 + vWave * 0.12, 0.0, 1.0);
+          vec3 color = mix(uColorB, uColorA, mixAmount) * (0.70 + uBass * 0.35);
+          gl_FragColor = vec4(color, 0.63);
+        }`,
+    });
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(1.24, 64, 44), material);
+    sphere.rotation.z = 0.18;
+    scene.add(sphere);
+    const rings = [1.87, 2.0].map((radius, index) => {
+      const points = Array.from({ length: 180 }, (_, i) => {
+        const angle = i / 180 * Math.PI * 2;
+        return new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0);
+      });
+      const ring = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: palettes.aurora.a, transparent: true, opacity: index ? 0.08 : 0.16 }));
+      ring.rotation.set(1.25 + index * 0.22, index * 0.25, 0.22);
+      scene.add(ring); return ring;
+    });
+    const dustPositions = new Float32Array(420 * 3);
+    for (let i = 0; i < 420; i++) {
+      const azimuth = Math.random() * Math.PI * 2;
+      const elevation = Math.acos(2 * Math.random() - 1);
+      const radius = 2.6 + Math.random() * 4;
+      dustPositions[i * 3] = radius * Math.sin(elevation) * Math.cos(azimuth);
+      dustPositions[i * 3 + 1] = radius * Math.cos(elevation);
+      dustPositions[i * 3 + 2] = radius * Math.sin(elevation) * Math.sin(azimuth);
+    }
+    const dustGeometry = new THREE.BufferGeometry();
+    dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
+    const dust = new THREE.Points(dustGeometry, new THREE.PointsMaterial({ color: palettes.aurora.a, size: 0.013, transparent: true, opacity: 0.34, depthWrite: false }));
+    scene.add(dust);
+    app = { renderer, bloom, uniforms, sphere, dust, rings, controls, composer };
+    function resize() {
+      const width = Math.max(1, viewport.clientWidth), height = Math.max(1, viewport.clientHeight);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height, false);
+      composer.setSize(width, height);
+    }
+    new ResizeObserver(resize).observe(viewport);
+    resize(); applySettings();
+    $('renderStatus').textContent = '3D engine ready';
+    $('demoButton').disabled = false;
+    syncPlaybackUI();
+    renderer.domElement.addEventListener('webglcontextlost', (event) => {
+      event.preventDefault(); renderer.setAnimationLoop(null);
+      audio.pause(); stopDemo();
+      $('renderStatus').textContent = 'Graphics connection lost';
+      message('The graphics context was lost. Reload this page to restart.', true);
+    });
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let previous = performance.now();
+    renderer.setAnimationLoop((now) => {
+      const delta = Math.min((now - previous) / 1000, 0.06);
+      previous = now;
+      if (document.hidden) return;
+      elapsed += delta;
+      updateAudio(delta);
+      const response = Number($('sensitivity').value);
+      const motion = reducedMotion.matches ? 0.2 : 1;
+      uniforms.uTime.value = elapsed * motion;
+      uniforms.uBass.value = levels.bass * response * motion;
+      uniforms.uMid.value = levels.mid * response * motion;
+      uniforms.uHigh.value = levels.high * response * motion;
+      sphere.rotation.y += delta * Number($('rotation').value) * motion;
+      dust.rotation.y += delta * 0.012 * motion;
+      rings[0].rotation.z += delta * 0.015 * motion;
+      controls.update();
+      composer.render(delta);
+    });
+  } catch (error) {
+    console.error('Visualizer initialization failed:', error);
+    $('renderStatus').textContent = 'Unable to start 3D';
+    message('3D could not start. Open this page through GitHub Pages or a local web server, check your connection, and ensure WebGL is enabled.', true);
+  }
+}
+window.addEventListener('pagehide', () => {
+  audio.pause(); stopDemo();
+});
+// Refill the synth scheduler after returning to a backgrounded tab.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && demoActive && nextDemoTime < audioContext.currentTime) nextDemoTime = audioContext.currentTime + 0.04;
+});
+applySettings();
+init();
